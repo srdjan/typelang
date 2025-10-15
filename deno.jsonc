@@ -1,0 +1,12 @@
+{
+  "$schema": "https://deno.land/x/deno/schemas/deno.schema.json",
+  "tasks": {
+    "dev": "deno run -A server/main.ts",
+    "lint": "deno lint --quiet && deno run -A scripts/lint_subset.ts",
+    "fmt": "deno fmt"
+  },
+  "lint": {
+    "rules": { "include": ["recommended"] }
+  },
+  "fmt": { "useTabs": false, "lineWidth": 100, "indentWidth": 2, "semiColons": true }
+}
