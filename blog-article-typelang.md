@@ -13,6 +13,8 @@ So: what happens when we constrain how code can be written, making effects expli
 
 **typelang** is a disciplined subset of TypeScript that combines three core ideas: a strict functional programming subset enforced by tooling, an algebraic effects system that makes side effects visible in type signatures, and zero new syntax—it's 100% valid TypeScript that runs on Deno. These constraints emerged from a fundamental belief: **the code we cannot write is as important as the code we can**.
 
+GitHub repo: [https://github.com/srdjan/typelang](https://github.com/srdjan/typelang)
+
 This article describes the principles behind **typelang**, how the constraint system works, and what we've learned from building software this way.
 
 ## Foundation: Constraints as Design Philosophy
@@ -228,3 +230,4 @@ The lessons from **typelang** generalize beyond this specific system:
 
 The code we cannot write protects us from complexity we cannot manage.
 
+<sub>Made with the help of my two favorite devs: Clody & Gipity. Enjoy!</sub>
