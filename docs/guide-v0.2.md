@@ -1,6 +1,6 @@
 # typelang v0.2.0 Language Guide
 
-*A functional TypeScript subset with algebraic effects*
+_A functional TypeScript subset with algebraic effects_
 
 ---
 
@@ -24,14 +24,19 @@
 
 ## 1) Introduction
 
-**typelang** is a disciplined profile of TypeScript for pure-FP application code with explicit, algebraic effects. It is **100% valid TypeScript**—no custom syntax, no decorators—and ships a tiny runtime to interpret effects via **handlers**.
+**typelang** is a disciplined profile of TypeScript for pure-FP application code with explicit,
+algebraic effects. It is **100% valid TypeScript**—no custom syntax, no decorators—and ships a tiny
+runtime to interpret effects via **handlers**.
 
 **DX goals**
 
-* **Zero new syntax:** Everything compiles with `tsc`/Deno.
-* **Explicit effects:** Function types carry a phantom `Eff<A,E>` so the compiler tracks capabilities.
-* **Great ergonomics:** Write linear code with `seq()`, run concurrency with `par()`. No generators in app code.
-* **Strict subset:** We ban classes, mutation, loops, etc., and **enforce** it with Deno lint + an AST subset check.
+- **Zero new syntax:** Everything compiles with `tsc`/Deno.
+- **Explicit effects:** Function types carry a phantom `Eff<A,E>` so the compiler tracks
+  capabilities.
+- **Great ergonomics:** Write linear code with `seq()`, run concurrency with `par()`. No generators
+  in app code.
+- **Strict subset:** We ban classes, mutation, loops, etc., and **enforce** it with Deno lint + an
+  AST subset check.
 
 ---
 
@@ -46,10 +51,13 @@
 
 ```ts
 // main.ts
-import { seq, par, match, pipe, defineEffect, Console, Exception, State } from "./typelang/mod.ts";
+import { Console, defineEffect, Exception, match, par, pipe, seq, State } from "./typelang/mod.ts";
 
 // Program: increments state, logs, and returns next
-type App = ReturnType<typeof State.spec<{ n: number }>> & typeof Console.spec & typeof Exception.spec;
+type App =
+  & ReturnType<typeof State.spec<{ n: number }>>
+  & typeof Console.spec
+  & typeof Exception.spec;
 
 const tick = () =>
   seq()
@@ -73,15 +81,16 @@ console.log(await runApp(both)); // see runApp in §9
 
 ## 3) Subset Rules (enforced in Deno)
 
-**Disallowed:** classes/`this`/`new`, `var`/`let`, loops (`for/while/do`), mutation (`++`, `--`, assignment expressions), enums, namespaces, decorators.
+**Disallowed:** classes/`this`/`new`, `var`/`let`, loops (`for/while/do`), mutation (`++`, `--`,
+assignment expressions), enums, namespaces, decorators.
 
 **How it’s enforced**
 
-* `deno lint` baseline + formatting.
-* A tiny `scripts/lint_subset.ts` (AST walker using `deno_ast`) fails CI on forbidden syntax.
-* You get a single `deno task lint` that enforces the subset project-wide.
+- `deno lint` baseline + formatting.
+- A tiny `scripts/lint_subset.ts` (AST walker using `deno_ast`) fails CI on forbidden syntax.
+- You get a single `deno task lint` that enforces the subset project-wide.
 
-> Result → The *guide’s subset* is not just documentation; it is **tool-enforced**.
+> Result → The _guide’s subset_ is not just documentation; it is **tool-enforced**.
 
 ---
 
@@ -97,13 +106,14 @@ export type With<E, A> = Eff<A, E>;
 export type Combine<E1, E2> = E1 & E2;
 ```
 
-* Use `Eff<Return, EffectSet>` in function signatures.
-* The compiler propagates E across combinators; runtime is effect-free unless you interpret it via handlers.
+- Use `Eff<Return, EffectSet>` in function signatures.
+- The compiler propagates E across combinators; runtime is effect-free unless you interpret it via
+  handlers.
 
 ### 4.2 Data
 
-* Immutable by default. Prefer `readonly` everywhere.
-* Algebraic data via tagged unions:
+- Immutable by default. Prefer `readonly` everywhere.
+- Algebraic data via tagged unions:
 
 ```ts
 type Option<T> = { tag: "Some"; value: T } | { tag: "None" };
@@ -117,15 +127,25 @@ type Option<T> = { tag: "Some"; value: T } | { tag: "None" };
 
 ```ts
 // Console
-export interface ConsoleSpec { log(msg: string): void; warn(msg: string): void; error(msg: string): void }
+export interface ConsoleSpec {
+  log(msg: string): void;
+  warn(msg: string): void;
+  error(msg: string): void;
+}
 export const Console = defineEffect<"Console", ConsoleSpec>("Console");
 
 // Exception
-export interface ExceptionSpec { fail<E>(e: E): never }
+export interface ExceptionSpec {
+  fail<E>(e: E): never;
+}
 export const Exception = defineEffect<"Exception", ExceptionSpec>("Exception");
 
 // State
-export interface StateSpec<S> { get(): S; put(s: S): void; modify(f: (s: S) => S): void }
+export interface StateSpec<S> {
+  get(): S;
+  put(s: S): void;
+  modify(f: (s: S) => S): void;
+}
 export const State = {
   spec: <S>() => defineEffect<"State", StateSpec<S>>("State"),
   // generic helpers (optional):
@@ -135,15 +155,16 @@ export const State = {
 };
 ```
 
-`defineEffect` returns typed **ops** (effect instructions). Application code never sees generators; it uses builders (`seq`, `par`) that **yield ops internally**.
+`defineEffect` returns typed **ops** (effect instructions). Application code never sees generators;
+it uses builders (`seq`, `par`) that **yield ops internally**.
 
 ### 5.2 Handlers (one uniform shape)
 
 A **handler** implements some (or all) operations of an effect:
 
-* receives `(args)`,
-* decides what to do,
-* **resumes** the continuation with a result (or never, for `fail`).
+- receives `(args)`,
+- decides what to do,
+- **resumes** the continuation with a result (or never, for `fail`).
 
 The runtime composes handlers in a **stack** (inner wins for conflicts).
 
@@ -154,7 +175,9 @@ The runtime composes handlers in a **stack** (inner wins for conflicts).
 ### 6.1 `seq()` — linear composition, iterator-free
 
 ```ts
-const addTodo = (text: string): Eff<string, Combine<ReturnType<typeof State.spec<AppState>>, typeof Exception.spec>> =>
+const addTodo = (
+  text: string,
+): Eff<string, Combine<ReturnType<typeof State.spec<AppState>>, typeof Exception.spec>> =>
   seq()
     .do(() => guard(text.trim() !== "", () => Exception.op.fail({ tag: "InvalidInput" })))
     .let("s", () => State.get<AppState>())
@@ -166,9 +189,9 @@ const addTodo = (text: string): Eff<string, Combine<ReturnType<typeof State.spec
 
 **Primitives**
 
-* `.let(key, effOrPure)` binds a name to the result (effectful or pure).
-* `.do(eff)` performs an action, returns previous context.
-* `.return(f)` closes the builder with a pure value.
+- `.let(key, effOrPure)` binds a name to the result (effectful or pure).
+- `.do(eff)` performs an action, returns previous context.
+- `.return(f)` closes the builder with a pure value.
 
 ### 6.2 `par` — structured concurrency
 
@@ -201,9 +224,11 @@ par.group()
 
 **Semantics**
 
-* **Error propagation** (default): if any task performs `Exception.fail`, the whole `par` fails; remaining tasks are **asked to cancel** (see §9.5).
-* **Determinism**: result shapes are deterministic; internal scheduling is not.
-* **Handlers** decide actual concurrency: a default Async handler uses `Promise.all`; a deterministic Random handler doesn’t care.
+- **Error propagation** (default): if any task performs `Exception.fail`, the whole `par` fails;
+  remaining tasks are **asked to cancel** (see §9.5).
+- **Determinism**: result shapes are deterministic; internal scheduling is not.
+- **Handlers** decide actual concurrency: a default Async handler uses `Promise.all`; a
+  deterministic Random handler doesn’t care.
 
 ---
 
@@ -216,7 +241,7 @@ type CaseOf<T> = T extends { tag: infer K } ? K & string : never;
 
 export function match<T extends { tag: string }, R>(
   value: T,
-  cases: { [K in CaseOf<T>]: (v: Extract<T, { tag: K }>) => R }
+  cases: { [K in CaseOf<T>]: (v: Extract<T, { tag: K }>) => R },
 ): R {
   const f = (cases as any)[value.tag];
   if (f) return f(value as any);
@@ -252,24 +277,24 @@ All functions are pure and return `readonly` where applicable. Eff-aware variant
 
 ### 9.1 Effects
 
-* **Console**: `log/warn/error`
-* **Exception**: `fail<E>(e: E): never`
-* **State<S>**: `get/put/modify`
-* **Async**: `sleep(ms)`, `await<T>(p: Promise<T>): T` *(optional, used by Http)*
-* **Random**: `nextInt(max)`, `next()`
-* **FileSystem**: `readFile/writeFile/exists/listDir`
-* **Http**: `get/post/request`
-* **Env**: `getEnv(key)`, `now()`
+- **Console**: `log/warn/error`
+- **Exception**: `fail<E>(e: E): never`
+- **State<S>**: `get/put/modify`
+- **Async**: `sleep(ms)`, `await<T>(p: Promise<T>): T` _(optional, used by Http)_
+- **Random**: `nextInt(max)`, `next()`
+- **FileSystem**: `readFile/writeFile/exists/listDir`
+- **Http**: `get/post/request`
+- **Env**: `getEnv(key)`, `now()`
 
 ### 9.2 Stock handlers (test-friendly)
 
-* `Console.capture()` → `{ result, logs }`
-* `Exception.tryCatch()` → `Res.Ok/Err`
-* `State.with<S>(initial)` → `{ result, state }`
-* `Random.seed(seed)` → deterministic RNG
-* `FS.memory()` → in-memory FS
-* `Http.fake(routes)` → table-driven responses
-* `Async.default()` → scheduler using `Promise` & `Promise.all` (powering `par`)
+- `Console.capture()` → `{ result, logs }`
+- `Exception.tryCatch()` → `Res.Ok/Err`
+- `State.with<S>(initial)` → `{ result, state }`
+- `Random.seed(seed)` → deterministic RNG
+- `FS.memory()` → in-memory FS
+- `Http.fake(routes)` → table-driven responses
+- `Async.default()` → scheduler using `Promise` & `Promise.all` (powering `par`)
 
 ### 9.3 Composing handlers & running programs
 
@@ -289,20 +314,21 @@ export const runApp = async <A>(thunk: () => A) => {
 
 ### 9.4 Error & result shaping
 
-* Compose handlers deliberately to shape the outer result (e.g., capture console, wrap exceptions).
-* Want plain `A` or `Promise<A>`? Use a top-level `interpretAll` handler that resolves everything and returns a value (or throws).
+- Compose handlers deliberately to shape the outer result (e.g., capture console, wrap exceptions).
+- Want plain `A` or `Promise<A>`? Use a top-level `interpretAll` handler that resolves everything
+  and returns a value (or throws).
 
 ### 9.5 Cancellation (cooperative)
 
-* `par` asks running tasks to cancel when a sibling fails (if a **Cancel** effect is installed).
-* Default: cooperative only; if a task ignores cancellation, `par` awaits it but discards result.
+- `par` asks running tasks to cancel when a sibling fails (if a **Cancel** effect is installed).
+- Default: cooperative only; if a task ignores cancellation, `par` awaits it but discards result.
 
 ---
 
 ## 10) Testing & Observability
 
-* Prefer stock handlers to make side-effects **visible** in tests.
-* Example:
+- Prefer stock handlers to make side-effects **visible** in tests.
+- Example:
 
 ```ts
 const { result, logs, state } = stack(
@@ -314,7 +340,7 @@ const { result, logs, state } = stack(
 // Assert on logs + state + result in a single value.
 ```
 
-* Add a `Trace` handler (optional) that logs each op (effect name, args) for visual debugging.
+- Add a `Trace` handler (optional) that logs each op (effect name, args) for visual debugging.
 
 ---
 
@@ -322,29 +348,31 @@ const { result, logs, state } = stack(
 
 1. **Run-in-place (default):**
 
-   * You write TypeScript with `seq`/`par`/`match`/`pipe`.
-   * The tiny runtime interprets ops via the composed handler stack.
-   * Great for Deno/Node, tests, SSR.
+   - You write TypeScript with `seq`/`par`/`match`/`pipe`.
+   - The tiny runtime interprets ops via the composed handler stack.
+   - Great for Deno/Node, tests, SSR.
 
 2. **Direct-style codegen (optional):**
 
-   * A codemod can lower builder chains to direct calls with continuations.
-   * Keeps types; improves hot paths.
+   - A codemod can lower builder chains to direct calls with continuations.
+   - Keeps types; improves hot paths.
 
 3. **CPS (advanced):**
 
-   * Experimental backend for maximal control; not recommended for day-to-day DX.
+   - Experimental backend for maximal control; not recommended for day-to-day DX.
 
 ---
 
 ## 12) Best Practices
 
-* **Effect caps by module:** export a *capability type* alias (e.g., `type AppCaps = ConsoleSpec & ExceptionSpec & ReturnType<typeof State.spec<AppState>>;`) and use it in signatures.
-* **Immutability first:** update via structural copies; prefer `readonly`.
-* **Match exhaustively:** never leave a tag unhandled.
-* **Prefer `seq` for clarity, `par` for I/O fan-out.** Keep each task small and independent.
-* **Testing:** compose handlers to return rich diagnostics; avoid global singletons.
-* **Lints:** keep `deno task lint` in CI; treat subset violations as build-breaking.
+- **Effect caps by module:** export a _capability type_ alias (e.g.,
+  `type AppCaps = ConsoleSpec & ExceptionSpec & ReturnType<typeof State.spec<AppState>>;`) and use
+  it in signatures.
+- **Immutability first:** update via structural copies; prefer `readonly`.
+- **Match exhaustively:** never leave a tag unhandled.
+- **Prefer `seq` for clarity, `par` for I/O fan-out.** Keep each task small and independent.
+- **Testing:** compose handlers to return rich diagnostics; avoid global singletons.
+- **Lints:** keep `deno task lint` in CI; treat subset violations as build-breaking.
 
 ---
 
@@ -352,17 +380,26 @@ const { result, logs, state } = stack(
 
 ```ts
 // types.ts
-import { defineEffect, Eff, seq, par, match } from "./typelang/mod.ts";
+import { defineEffect, Eff, match, par, seq } from "./typelang/mod.ts";
 
 // Effects
-export interface ConsoleSpec { log(x: string): void }
+export interface ConsoleSpec {
+  log(x: string): void;
+}
 export const Console = defineEffect<"Console", ConsoleSpec>("Console");
 
-export interface ExceptionSpec { fail<E>(e: E): never }
+export interface ExceptionSpec {
+  fail<E>(e: E): never;
+}
 export const Exception = defineEffect<"Exception", ExceptionSpec>("Exception");
 
-export interface StateSpec<S> { get(): S; put(s: S): void; modify(f: (s: S) => S): void }
-export const State = { spec: <S>() => defineEffect<"State", StateSpec<S>>("State"),
+export interface StateSpec<S> {
+  get(): S;
+  put(s: S): void;
+  modify(f: (s: S) => S): void;
+}
+export const State = {
+  spec: <S>() => defineEffect<"State", StateSpec<S>>("State"),
   get: <S>() => State.spec<S>().op.get(),
   put: <S>(s: S) => State.spec<S>().op.put(s),
   modify: <S>(f: (s: S) => S) => State.spec<S>().op.modify(f),
@@ -390,7 +427,7 @@ export const addTodo = (text: string): Eff<TodoId, AppCaps> =>
 export const toggleTodo = (id: TodoId): Eff<void, AppCaps> =>
   seq()
     .let("s", () => State.get<AppState>())
-    .let("idx", ({ s }) => s.todos.findIndex(t => t.id === id))
+    .let("idx", ({ s }) => s.todos.findIndex((t) => t.id === id))
     .do(({ idx }) => guard(idx >= 0, () => Exception.op.fail({ tag: "NotFound", id })))
     .do(({ s, idx }) => {
       const t = s.todos[idx];
@@ -402,16 +439,17 @@ export const toggleTodo = (id: TodoId): Eff<void, AppCaps> =>
     .return(() => undefined);
 
 // parallel: add many todos concurrently
-export const addMany = (texts: readonly string[]) =>
-  par.map(texts, (t) => addTodo(t));
+export const addMany = (texts: readonly string[]) => par.map(texts, (t) => addTodo(t));
 
 // helpers.ts
-export const guard = <E>(cond: boolean, onFail: () => Eff<never, ExceptionSpec>): Eff<void, ExceptionSpec> =>
-  cond ? (undefined as any) : onFail();
+export const guard = <E>(
+  cond: boolean,
+  onFail: () => Eff<never, ExceptionSpec>,
+): Eff<void, ExceptionSpec> => cond ? (undefined as any) : onFail();
 
 // main.ts
-import { stack, handlers } from "./typelang/runtime.ts";
-import { addTodo, toggleTodo, addMany } from "./ops.ts";
+import { handlers, stack } from "./typelang/runtime.ts";
+import { addMany, addTodo, toggleTodo } from "./ops.ts";
 import { AppState } from "./types.ts";
 
 const run = stack(
@@ -443,23 +481,24 @@ console.log({ result, logs, state });
 
 **Core**
 
-* `type Eff<A,E>`; `Pure<A>`; `Combine<E1,E2>`
-* `defineEffect<Name, Spec>(name)`
-* `seq().let(k, eff).do(eff).return(f)`
-* `par.all(record)`, `par.map(xs, f)`, `par.race(thunks)`, `par.any(thunks)`
-* `match(value, cases)`, `pipe(x, ...fns)`
+- `type Eff<A,E>`; `Pure<A>`; `Combine<E1,E2>`
+- `defineEffect<Name, Spec>(name)`
+- `seq().let(k, eff).do(eff).return(f)`
+- `par.all(record)`, `par.map(xs, f)`, `par.race(thunks)`, `par.any(thunks)`
+- `match(value, cases)`, `pipe(x, ...fns)`
 
 **Handlers (examples)**
 
-* `stack(...handlers).run(thunk)`
-* `handlers.Console.capture()`, `handlers.Exception.tryCatch()`
-* `handlers.State.with<S>(initial)`, `handlers.Random.seed(n)`
-* `handlers.Http.fake(routes)`, `handlers.Async.default()`
+- `stack(...handlers).run(thunk)`
+- `handlers.Console.capture()`, `handlers.Exception.tryCatch()`
+- `handlers.State.with<S>(initial)`, `handlers.Random.seed(n)`
+- `handlers.Http.fake(routes)`, `handlers.Async.default()`
 
 **Lint**
 
-* `deno task lint` → Deno lint + `scripts/lint_subset.ts` (subset enforcement)
+- `deno task lint` → Deno lint + `scripts/lint_subset.ts` (subset enforcement)
 
 ---
 
-That’s v0.2.0: a strict, Deno-native TS subset with algebraic effects, **iterator-free app ergonomics** (`seq`, `par`), explicit capabilities, and a tiny, composable runtime.
+That’s v0.2.0: a strict, Deno-native TS subset with algebraic effects, **iterator-free app
+ergonomics** (`seq`, `par`), explicit capabilities, and a tiny, composable runtime.

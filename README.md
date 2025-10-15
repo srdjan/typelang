@@ -1,6 +1,7 @@
 # typelang v0.1 + Deno HTTP Server (Example Repo)
 
-Lean, functional TypeScript subset with (optional) algebraic-effects style APIs and a **modern Deno HTTP server** that accepts externally-defined `Routes`.
+Lean, functional TypeScript subset with (optional) algebraic-effects style APIs and a **modern Deno
+HTTP server** that accepts externally-defined `Routes`.
 
 ## Run
 
@@ -15,7 +16,8 @@ deno task dev
 deno task lint
 ```
 
-This runs Deno's linter plus an AST-based subset checker that forbids: classes, `this`, `new`, loops, mutation (`++`, `--`, assignments), enums, namespaces, decorators, and `let`/`var`.
+This runs Deno's linter plus an AST-based subset checker that forbids: classes, `this`, `new`,
+loops, mutation (`++`, `--`, assignments), enums, namespaces, decorators, and `let`/`var`.
 
 ## Project layout
 
@@ -44,7 +46,8 @@ typelang-repo/
 - `seq()` and `par` helpers (iterator-free) for linear & parallel steps
 - `match()` and `pipe()` utilities
 
-> The example server does not require effect handlers to run; the typelang helpers are included to show how you would structure app logic in the subset without generators.
+> The example server does not require effect handlers to run; the typelang helpers are included to
+> show how you would structure app logic in the subset without generators.
 
 ---
 

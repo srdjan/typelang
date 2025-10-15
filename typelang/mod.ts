@@ -1,80 +1,140 @@
 // typelang/mod.ts
-// Minimal v0.1 surface: Eff phantom type, defineEffect, seq/par, match, pipe.
-// This file intentionally keeps runtime tiny for the example server.
-export type Eff<A, E> = A & { readonly __eff?: (e: E) => E };
-export type Pure<A> = Eff<A, {}>;
-export type Combine<E1, E2> = E1 & E2;
+// Public surface: types, effect constructors, sequential/parallel combinators, and helpers.
 
-// Simple effect op constructor factory (types-first; runtime opaque)
-export type Instr<Name extends string, K extends string, R, Args extends any[]> = {
-  readonly _tag: Name;
-  readonly kind: K;
-  readonly args: Args;
-  readonly __ret?: R;
-};
+import { Handler, handlers as builtInHandlers, resolveEff, stack } from "./runtime.ts";
+import { AwaitedReturn, Capability, Combine, Eff, Instr, Pure } from "./types.ts";
 
-export function defineEffect<Name extends string, Spec extends Record<string, (...a: any[]) => any>>(name: Name) {
+type EffectFn = (...args: any[]) => unknown;
+
+type Args<F> = F extends (...args: infer A) => unknown ? readonly [...A] : readonly unknown[];
+type Ret<F> = F extends (...args: any[]) => infer R ? AwaitedReturn<R> : never;
+
+export type { Capability, Combine, Eff, Pure };
+export { builtInHandlers as handlers, resolveEff, stack };
+export type { Handler };
+
+// Effect constructor --------------------------------------------------------
+
+export function defineEffect<
+  Name extends string,
+  Spec extends { readonly [K in keyof Spec]: EffectFn },
+>(name: Name) {
   type K = keyof Spec & string;
-  type Ret<F> = F extends (...a: any[]) => infer R ? R : never;
-  type Args<F> = F extends (...a: infer A) => any ? A : never;
+  type OpMap = {
+    readonly [P in K]: (...args: Args<Spec[P]>) => Eff<Ret<Spec[P]>, Capability<Name, Spec>>;
+  };
 
-  const op = new Proxy({} as any as { [P in K]: (...a: Args<Spec[P]>) => Instr<Name, P, Ret<Spec[P]>, Args<Spec[P]>> }, {
-    get: (_t, prop: string) => (...args: unknown[]) => ({ _tag: name, kind: prop, args }) as any
+  const op = new Proxy({} as OpMap, {
+    get: (_target, prop: string) => (...args: readonly unknown[]) =>
+      ({ _tag: name, kind: prop, args, __ret: undefined as unknown as Ret<Spec[K]> } as Instr<
+        Name,
+        typeof prop,
+        Ret<Spec[K]>,
+        typeof args
+      >) as unknown as Eff<Ret<Spec[K]>, Capability<Name, Spec>>,
   });
-  return { op } as const;
+
+  const spec = {} as Capability<Name, Spec>;
+
+  return { name, op, spec } as const;
 }
 
-// Iterator-free sequential builder (supports sync/async operations)
-export type Ctx = Record<string, unknown>;
-type Step<C> = (c: Readonly<C>) => unknown | Promise<unknown>;
-export function seq<C0 extends Ctx = {}>() {
-  const steps: Step<C0>[] = [];
-  let ctx: any = {} as C0;
+// Sequential builder --------------------------------------------------------
 
-  const api: any = {
-    let<K extends string, A>(key: K, f: (c: Readonly<C0>) => A | Promise<A>) {
-      steps.push(async (c) => ({ ...c, [key]: await f(c as any) }));
-      return api;
-    },
-    do<E>(f: (c: Readonly<C0>) => unknown | Promise<unknown>) {
-      steps.push(async (c) => { await f(c as any); return c; });
-      return api;
-    },
-    async return<A>(f: (c: Readonly<C0>) => A | Promise<A>) {
-      for (const s of steps) ctx = await s(ctx);
-      return await f(ctx);
-    }
-  };
-  return api as {
-    let: typeof api.let;
-    do: typeof api.do;
-    return: typeof api.return;
-  };
-}
+type Ctx = Readonly<Record<string, unknown>>;
+type StepFn = (ctx: Record<string, unknown>) => Promise<Record<string, unknown>>;
 
-// Parallel helpers built on Promise.all
-export const par = {
-  async all<T extends Record<string, () => any>>(tasks: T): Promise<{ [K in keyof T]: Awaited<ReturnType<T[K]>> }> {
-    const entries = Object.entries(tasks) as [string, () => any][];
-    const results = await Promise.all(entries.map(([_, t]) => t()));
-    const out: Record<string, unknown> = {};
-    entries.forEach(([k], i) => out[k] = results[i]);
-    return out as any;
-  },
-  async map<T, U>(xs: readonly T[], f: (t: T) => any): Promise<readonly U[]> {
-    return await Promise.all(xs.map((x) => f(x))) as unknown as readonly U[];
-  },
-  async race<T>(thunks: readonly Array<() => any>): Promise<T> {
-    return await Promise.race(thunks.map((t) => t())) as T;
-  }
+type SeqBuilder<C> = {
+  let<K extends string, A, E>(
+    key: K,
+    f: (ctx: Readonly<C>) => Eff<A, E>,
+  ): SeqBuilder<C & Readonly<Record<K, A>>>;
+  do<E>(f: (ctx: Readonly<C>) => Eff<unknown, E>): SeqBuilder<C>;
+  return<A, E>(f: (ctx: Readonly<C>) => Eff<A, E>): Eff<A, E>;
 };
 
-// Exhaustive pattern matching helper
-export function match<T extends { tag: string }, R>(value: T, cases: { [K in T["tag"]]: (v: Extract<T, { tag: K }>) => R }): R {
-  const fn = (cases as any)[value.tag];
-  if (!fn) throw new Error("Non-exhaustive match for tag=" + value.tag);
-  return fn(value as any);
+const freeze = <T extends Record<string, unknown>>(value: T): T => Object.freeze({ ...value });
+
+const runSteps = async (steps: readonly StepFn[]): Promise<Record<string, unknown>> =>
+  steps.reduce(
+    (acc, step) => acc.then(step),
+    Promise.resolve(freeze({})),
+  );
+
+const buildSeq = <C>(steps: readonly StepFn[]): SeqBuilder<C> => ({
+  let<K extends string, A, E>(key: K, f: (ctx: Readonly<C>) => Eff<A, E>) {
+    const next: StepFn = async (ctx) => {
+      const current = ctx as Readonly<C>;
+      const value = await resolveEff(f(current));
+      return freeze({ ...current, [key]: value });
+    };
+    return buildSeq<C & Readonly<Record<K, A>>>([...steps, next]);
+  },
+  do<E>(f: (ctx: Readonly<C>) => Eff<unknown, E>) {
+    const next: StepFn = async (ctx) => {
+      await resolveEff(f(ctx as Readonly<C>));
+      return ctx;
+    };
+    return buildSeq<C>([...steps, next]);
+  },
+  return<A, E>(f: (ctx: Readonly<C>) => Eff<A, E>) {
+    return resolveEff(
+      (async () => {
+        const context = await runSteps(steps);
+        return await resolveEff(f(context as Readonly<C>));
+      })(),
+    ) as unknown as Eff<A, E>;
+  },
+});
+
+export function seq<C0 extends Ctx = {}>() {
+  return buildSeq<C0>([]);
 }
 
-// Left-to-right function piping
-export const pipe = <A>(a: A, ...fns: Array<(x: any) => any>) => fns.reduce((x, f) => f(x), a);
+// Parallel helpers ----------------------------------------------------------
+
+const mapEntries = async (
+  entries: readonly [string, () => Eff<unknown, unknown>][],
+): Promise<Readonly<Record<string, unknown>>> => {
+  const results = await Promise.all(entries.map(([_, task]) => resolveEff(task())));
+  return Object.freeze(
+    Object.fromEntries(entries.map(([key], index) => [key, results[index]])),
+  );
+};
+
+export const par = {
+  all<T extends Record<string, () => Eff<unknown, unknown>>>(tasks: T) {
+    const entries = Object.entries(tasks) as readonly [string, () => Eff<unknown, unknown>][];
+    return resolveEff(
+      (async () => await mapEntries(entries))(),
+    ) as unknown as Eff<
+      { readonly [K in keyof T]: AwaitedReturn<ReturnType<T[K]>> },
+      unknown
+    >;
+  },
+  map<T, U, E>(xs: readonly T[], f: (value: T) => Eff<U, E>) {
+    return resolveEff(
+      (async () => await Promise.all(xs.map((x) => resolveEff(f(x)))))(),
+    ) as unknown as Eff<readonly AwaitedReturn<U>[], E>;
+  },
+  race<T, E>(thunks: readonly (() => Eff<T, E>)[]) {
+    return resolveEff(Promise.race(thunks.map((t) => resolveEff(t())))) as unknown as Eff<
+      AwaitedReturn<T>,
+      E
+    >;
+  },
+} as const;
+
+// Utilities -----------------------------------------------------------------
+
+export const match = <T extends { readonly tag: string }, R>(
+  value: T,
+  cases: { readonly [K in T["tag"]]: (v: Extract<T, { readonly tag: K }>) => R },
+): R => {
+  const handler = cases[value.tag as T["tag"]];
+  if (!handler) throw Error(`Non-exhaustive match for tag=${value.tag}`);
+  return handler(value as Extract<T, { readonly tag: typeof value.tag }>);
+};
+
+export const pipe = <A>(input: A, ...fns: ReadonlyArray<(x: unknown) => unknown>) =>
+  fns.reduce<unknown>((acc, fn) => fn(acc), input as unknown);

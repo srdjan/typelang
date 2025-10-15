@@ -1,5 +1,5 @@
 // server/middleware.ts
-import { Middleware, Handler, RequestCtx } from "./types.ts";
+import { Handler, Middleware, RequestCtx } from "./types.ts";
 import { text } from "./http.ts";
 
 export const compose = (mws: readonly Middleware[], terminal: Handler): Handler =>
@@ -22,8 +22,10 @@ export const withErrorBoundary: Middleware = (next) => async (ctx) => {
   }
 };
 
-export const withCors = (allow: Readonly<{ origin: string; methods?: string; headers?: string }>): Middleware =>
-  (next) => async (ctx) => {
+export const withCors =
+  (allow: Readonly<{ origin: string; methods?: string; headers?: string }>): Middleware =>
+  (next) =>
+  async (ctx) => {
     if (ctx.req.method === "OPTIONS") {
       return new Response(null, {
         status: 204,
@@ -31,7 +33,7 @@ export const withCors = (allow: Readonly<{ origin: string; methods?: string; hea
           "access-control-allow-origin": allow.origin,
           "access-control-allow-methods": allow.methods ?? "GET,POST,PUT,PATCH,DELETE,OPTIONS",
           "access-control-allow-headers": allow.headers ?? "content-type, authorization",
-        }
+        },
       });
     }
     const res = await next(ctx);
@@ -71,11 +73,13 @@ export const withStatic = (prefix: string, dir: string): Middleware => (next) =>
       "jpeg": "image/jpeg",
       "ico": "image/x-icon",
     } as const)[ext] ?? "application/octet-stream";
-    return new Response(data, { headers: { "content-type": type, "cache-control": "public, max-age=31536000, immutable" } });
+    return new Response(data, {
+      headers: { "content-type": type, "cache-control": "public, max-age=31536000, immutable" },
+    });
   } catch {
     return await next(ctx);
   }
 };
 
-export const withAuth = (predicate: (ctx: RequestCtx) => boolean): Middleware =>
-  (next) => (ctx) => predicate(ctx) ? next(ctx) : text("Unauthorized", { status: 401 });
+export const withAuth = (predicate: (ctx: RequestCtx) => boolean): Middleware => (next) => (ctx) =>
+  predicate(ctx) ? next(ctx) : text("Unauthorized", { status: 401 });

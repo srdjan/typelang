@@ -1,6 +1,6 @@
 // app/routes.ts
 import { Routes } from "../server/types.ts";
-import { json, html } from "../server/http.ts";
+import { html, isoNow, json, redirect } from "../server/http.ts";
 
 const ok = <T>(data: T) => json({ ok: true, data });
 
@@ -9,7 +9,8 @@ export const routes: Routes = [
   {
     method: "GET",
     path: "/",
-    handler: () => html(`<!doctype html>
+    handler: () =>
+      html(`<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -43,16 +44,18 @@ export const routes: Routes = [
     path: "/echo",
     handler: async ({ req }) => {
       const ct = req.headers.get("content-type") ?? "";
-      const body =
-        ct.includes("application/json")
-          ? await req.json()
-          : Object.fromEntries((await req.formData()).entries());
+      const body = ct.includes("application/json")
+        ? await req.json()
+        : Object.fromEntries((await req.formData()).entries());
       return html(`<pre id="echo">${escapeHtml(JSON.stringify(body, null, 2))}</pre>`);
     },
   },
-  { method: "GET", path: "/api/time", handler: () => html(`<div id="time">${new Date().toISOString()}</div>`) },
-  { method: "GET", path: "/go", handler: () => new Response(null, { status: 302, headers: { location: "/" } }) },
+  { method: "GET", path: "/api/time", handler: () => html(`<div id="time">${isoNow()}</div>`) },
+  { method: "GET", path: "/go", handler: () => redirect("/") },
 ];
 
 const escapeHtml = (s: string) =>
-  s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+  s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll(
+    '"',
+    "&quot;",
+  ).replaceAll("'", "&#039;");

@@ -24,7 +24,9 @@
 
 ### What is typelang?
 
-typelang is a minimal, functional programming language that is a strict subset of TypeScript syntax, with one semantic addition: algebraic effects via the `interface` keyword. It compiles to JavaScript and provides:
+typelang is a minimal, functional programming language that is a strict subset of TypeScript syntax,
+with one semantic addition: algebraic effects via the `interface` keyword. It compiles to JavaScript
+and provides:
 
 - **Algebraic Data Types** - Sum and product types with exhaustive pattern matching
 - **Algebraic Effects** - Composable, trackable side effects via interfaces
@@ -35,6 +37,7 @@ typelang is a minimal, functional programming language that is a strict subset o
 ### Philosophy
 
 typelang embraces:
+
 - **Simplicity** - Minimal syntax, maximum expressiveness
 - **Purity** - Effects are explicit and composable
 - **Safety** - Compile-time guarantees prevent runtime errors
@@ -44,6 +47,7 @@ typelang embraces:
 ### What's Excluded
 
 typelang removes all object-oriented and imperative features:
+
 - ❌ Classes, `this`, prototypes, `new`
 - ❌ `var`, `let` (only `const`)
 - ❌ `enum`, `namespace`, decorators
@@ -58,45 +62,44 @@ typelang removes all object-oriented and imperative features:
 ### Hello World
 
 ```typescript
-import { Console } from 'typelang/effects'
-import { effect } from 'typelang/runtime'
+import { Console } from "typelang/effects";
+import { effect } from "typelang/runtime";
 
 const main = (): void & Console => {
-  effect(Console.log('Hello, typelang!'))
-}
+  effect(Console.log("Hello, typelang!"));
+};
 ```
 
 ### Basic Function
 
 ```typescript
 // Pure function - no effects
-const add = (a: number, b: number): number => 
-  a + b
+const add = (a: number, b: number): number => a + b;
 
 // Function with effects
 const greet = (name: string): void & Console => {
-  effect(Console.log(`Hello, ${name}!`))
-}
+  effect(Console.log(`Hello, ${name}!`));
+};
 ```
 
 ### Immutability
 
 ```typescript
 // All bindings are immutable
-const x = 42
+const x = 42;
 // x = 43  // ❌ Error: cannot reassign
 
 // Records are readonly
 type Point = {
-  readonly x: number
-  readonly y: number
-}
+  readonly x: number;
+  readonly y: number;
+};
 
 // Create new values instead of mutating
 const movePoint = (p: Point, dx: number, dy: number): Point => ({
   x: p.x + dx,
-  y: p.y + dy
-})
+  y: p.y + dy,
+});
 ```
 
 ---
@@ -106,100 +109,100 @@ const movePoint = (p: Point, dx: number, dy: number): Point => ({
 ### Primitive Types
 
 ```typescript
-const num: number = 42
-const str: string = "hello"
-const bool: boolean = true
-const nothing: null = null
-const undef: undefined = undefined
+const num: number = 42;
+const str: string = "hello";
+const bool: boolean = true;
+const nothing: null = null;
+const undef: undefined = undefined;
 ```
 
 ### Type Aliases
 
 ```typescript
-type UserId = string
-type Timestamp = number
-type Age = number
+type UserId = string;
+type Timestamp = number;
+type Age = number;
 
-const userId: UserId = "user-123"
+const userId: UserId = "user-123";
 ```
 
 ### Product Types (Records)
 
 ```typescript
 type Person = {
-  readonly name: string
-  readonly age: number
-  readonly email: string
-}
+  readonly name: string;
+  readonly age: number;
+  readonly email: string;
+};
 
 const alice: Person = {
   name: "Alice",
   age: 30,
-  email: "alice@example.com"
-}
+  email: "alice@example.com",
+};
 ```
 
 ### Sum Types (Discriminated Unions)
 
 ```typescript
-type Shape = 
-  | { tag: 'Circle', radius: number }
-  | { tag: 'Rectangle', width: number, height: number }
-  | { tag: 'Triangle', base: number, height: number }
+type Shape =
+  | { tag: "Circle"; radius: number }
+  | { tag: "Rectangle"; width: number; height: number }
+  | { tag: "Triangle"; base: number; height: number };
 
-const circle: Shape = { tag: 'Circle', radius: 5 }
+const circle: Shape = { tag: "Circle", radius: 5 };
 ```
 
 ### Generics
 
 ```typescript
 type Box<T> = {
-  readonly value: T
-}
+  readonly value: T;
+};
 
-const numberBox: Box<number> = { value: 42 }
-const stringBox: Box<string> = { value: "hello" }
+const numberBox: Box<number> = { value: 42 };
+const stringBox: Box<string> = { value: "hello" };
 
 // Generic functions
 const map = <T, U>(
-  box: Box<T>, 
-  f: (x: T) => U
+  box: Box<T>,
+  f: (x: T) => U,
 ): Box<U> => ({
-  value: f(box.value)
-})
+  value: f(box.value),
+});
 ```
 
 ### Union Types
 
 ```typescript
-type StringOrNumber = string | number
+type StringOrNumber = string | number;
 
-const value1: StringOrNumber = "hello"
-const value2: StringOrNumber = 42
+const value1: StringOrNumber = "hello";
+const value2: StringOrNumber = 42;
 ```
 
 ### Intersection Types
 
 ```typescript
-type Named = { readonly name: string }
-type Aged = { readonly age: number }
-type Person = Named & Aged
+type Named = { readonly name: string };
+type Aged = { readonly age: number };
+type Person = Named & Aged;
 
-const person: Person = { name: "Bob", age: 25 }
+const person: Person = { name: "Bob", age: 25 };
 ```
 
 ### Type Inference
 
 ```typescript
 // Type is inferred as number
-const x = 42
+const x = 42;
 
 // Type is inferred as (a: number, b: number) => number
-const add = (a: number, b: number) => a + b
+const add = (a: number, b: number) => a + b;
 
 // Type is inferred from usage
-const double = (x: number) => x * 2
-const result = double(21)  // result: number
+const double = (x: number) => x * 2;
+const result = double(21); // result: number
 ```
 
 ---
@@ -209,87 +212,79 @@ const result = double(21)  // result: number
 ### Option Type
 
 ```typescript
-type Option<T> = 
-  | { tag: 'Some', value: T }
-  | { tag: 'None' }
+type Option<T> =
+  | { tag: "Some"; value: T }
+  | { tag: "None" };
 
 // Constructors
-const some = <T>(value: T): Option<T> => 
-  ({ tag: 'Some', value })
+const some = <T>(value: T): Option<T> => ({ tag: "Some", value });
 
-const none = <T>(): Option<T> => 
-  ({ tag: 'None' })
+const none = <T>(): Option<T> => ({ tag: "None" });
 
 // Usage
 const findUser = (id: string): Option<User> => {
-  const user = database.get(id)
-  return user !== undefined ? some(user) : none()
-}
+  const user = database.get(id);
+  return user !== undefined ? some(user) : none();
+};
 ```
 
 ### Result Type
 
 ```typescript
-type Result<T, E> = 
-  | { tag: 'Ok', value: T }
-  | { tag: 'Err', error: E }
+type Result<T, E> =
+  | { tag: "Ok"; value: T }
+  | { tag: "Err"; error: E };
 
 // Constructors
-const ok = <T, E>(value: T): Result<T, E> => 
-  ({ tag: 'Ok', value })
+const ok = <T, E>(value: T): Result<T, E> => ({ tag: "Ok", value });
 
-const err = <T, E>(error: E): Result<T, E> => 
-  ({ tag: 'Err', error })
+const err = <T, E>(error: E): Result<T, E> => ({ tag: "Err", error });
 
 // Usage
 const divide = (a: number, b: number): Result<number, string> => {
-  return b === 0 
-    ? err("Division by zero")
-    : ok(a / b)
-}
+  return b === 0 ? err("Division by zero") : ok(a / b);
+};
 ```
 
 ### List Type
 
 ```typescript
-type List<T> = 
-  | { tag: 'Nil' }
-  | { tag: 'Cons', head: T, tail: List<T> }
+type List<T> =
+  | { tag: "Nil" }
+  | { tag: "Cons"; head: T; tail: List<T> };
 
 // Constructors
-const nil = <T>(): List<T> => 
-  ({ tag: 'Nil' })
+const nil = <T>(): List<T> => ({ tag: "Nil" });
 
-const cons = <T>(head: T, tail: List<T>): List<T> => 
-  ({ tag: 'Cons', head, tail })
+const cons = <T>(head: T, tail: List<T>): List<T> => ({ tag: "Cons", head, tail });
 
 // Usage
-const list = cons(1, cons(2, cons(3, nil())))
+const list = cons(1, cons(2, cons(3, nil())));
 ```
 
 ### Custom ADTs
 
 ```typescript
 // Binary tree
-type Tree<T> = 
-  | { tag: 'Leaf', value: T }
-  | { tag: 'Node', left: Tree<T>, right: Tree<T> }
+type Tree<T> =
+  | { tag: "Leaf"; value: T }
+  | { tag: "Node"; left: Tree<T>; right: Tree<T> };
 
 // JSON value
-type Json = 
-  | { tag: 'Null' }
-  | { tag: 'Bool', value: boolean }
-  | { tag: 'Num', value: number }
-  | { tag: 'Str', value: string }
-  | { tag: 'Arr', items: readonly Json[] }
-  | { tag: 'Obj', fields: { readonly [key: string]: Json } }
+type Json =
+  | { tag: "Null" }
+  | { tag: "Bool"; value: boolean }
+  | { tag: "Num"; value: number }
+  | { tag: "Str"; value: string }
+  | { tag: "Arr"; items: readonly Json[] }
+  | { tag: "Obj"; fields: { readonly [key: string]: Json } };
 
 // HTTP method
-type HttpMethod = 
-  | { tag: 'GET' }
-  | { tag: 'POST', body: string }
-  | { tag: 'PUT', body: string }
-  | { tag: 'DELETE' }
+type HttpMethod =
+  | { tag: "GET" }
+  | { tag: "POST"; body: string }
+  | { tag: "PUT"; body: string }
+  | { tag: "DELETE" };
 ```
 
 ---
@@ -298,17 +293,18 @@ type HttpMethod =
 
 ### What are Effects?
 
-Effects represent side effects as first-class values. Instead of hiding side effects, typelang makes them explicit in function signatures.
+Effects represent side effects as first-class values. Instead of hiding side effects, typelang makes
+them explicit in function signatures.
 
 ```typescript
 // Pure function - no side effects
-const add = (a: number, b: number): number => a + b
+const add = (a: number, b: number): number => a + b;
 
 // Impure function - has Console effect
 const printSum = (a: number, b: number): void & Console => {
-  const sum = add(a, b)
-  effect(Console.log(`Sum: ${sum}`))
-}
+  const sum = add(a, b);
+  effect(Console.log(`Sum: ${sum}`));
+};
 ```
 
 ### Defining Effects
@@ -317,20 +313,20 @@ Effects are defined using `interface`:
 
 ```typescript
 interface Console {
-  log(msg: string): void
-  error(msg: string): void
-  warn(msg: string): void
+  log(msg: string): void;
+  error(msg: string): void;
+  warn(msg: string): void;
 }
 
 interface State<S> {
-  get(): S
-  put(s: S): void
-  modify(f: (s: S) => S): void
+  get(): S;
+  put(s: S): void;
+  modify(f: (s: S) => S): void;
 }
 
 interface FileSystem {
-  readFile(path: string): string
-  writeFile(path: string, content: string): void
+  readFile(path: string): string;
+  writeFile(path: string, content: string): void;
 }
 ```
 
@@ -339,7 +335,7 @@ interface FileSystem {
 Use `effect()` with effect constructors that mirror the interface:
 
 ```typescript
-effect(EffectConstructor.operation(...args))
+effect(EffectConstructor.operation(...args));
 ```
 
 The effect constructors are objects that match the effect interface:
@@ -365,23 +361,23 @@ const State = {
 ```typescript
 // Console effect
 const greeting = (): void & Console => {
-  effect(Console.log('Hello!'))
-  effect(Console.warn('This is a warning'))
-  effect(Console.error('This is an error'))
-}
+  effect(Console.log("Hello!"));
+  effect(Console.warn("This is a warning"));
+  effect(Console.error("This is an error"));
+};
 
 // State effect
 const increment = (): void & State<number> => {
-  const current = effect(State.get<number>())
-  effect(State.put(current + 1))
-}
+  const current = effect(State.get<number>());
+  effect(State.put(current + 1));
+};
 
 // Multiple effects
 const app = (): void & Console & State<number> => {
-  const count = effect(State.get<number>())
-  effect(Console.log(`Count: ${count}`))
-  effect(State.put(count + 1))
-}
+  const count = effect(State.get<number>());
+  effect(Console.log(`Count: ${count}`));
+  effect(State.put(count + 1));
+};
 ```
 
 ### Effect Composition
@@ -389,20 +385,20 @@ const app = (): void & Console & State<number> => {
 Effects compose via intersection types:
 
 ```typescript
-type Effects = Console & State<number> & Exception
+type Effects = Console & State<number> & Exception;
 
 const complexComputation = (): number & Effects => {
-  const state = effect(State.get<number>())
-  
+  const state = effect(State.get<number>());
+
   if (state < 0) {
-    effect(Exception.throw('Negative state!'))
+    effect(Exception.throw("Negative state!"));
   }
-  
-  effect(Console.log(`State: ${state}`))
-  effect(State.put(state + 1))
-  
-  return state * 2
-}
+
+  effect(Console.log(`State: ${state}`));
+  effect(State.put(state + 1));
+
+  return state * 2;
+};
 ```
 
 ### Effect Polymorphism
@@ -412,32 +408,31 @@ Functions can be polymorphic over effects:
 ```typescript
 const mapWithEffect = <T, U, E>(
   f: (x: T) => U & E,
-  list: List<T>
+  list: List<T>,
 ): List<U> & E => {
   return match(list, {
     Nil: () => nil(),
-    Cons: ({ head, tail }) => 
-      cons(f(head), mapWithEffect(f, tail))
-  })
-}
+    Cons: ({ head, tail }) => cons(f(head), mapWithEffect(f, tail)),
+  });
+};
 
 // Usage with different effects
-const numbers = cons(1, cons(2, cons(3, nil())))
+const numbers = cons(1, cons(2, cons(3, nil())));
 
 // With Console effect
 const withLogging = mapWithEffect(
   (x: number) => {
-    effect(Console.log(`Processing ${x}`))
-    return x * 2
+    effect(Console.log(`Processing ${x}`));
+    return x * 2;
   },
-  numbers
-)
+  numbers,
+);
 
 // Pure (no effects)
 const pure = mapWithEffect(
   (x: number) => x * 2,
-  numbers
-)
+  numbers,
+);
 ```
 
 ### Built-in Effects
@@ -630,44 +625,45 @@ const getApiKey = (): string & Environment & Exception => {
 const describe = <T>(opt: Option<T>): string =>
   match(opt, {
     Some: ({ value }) => `Value: ${value}`,
-    None: () => 'No value'
-  })
+    None: () => "No value",
+  });
 ```
 
 ### Exhaustiveness Checking
 
 ```typescript
-type Status = 
-  | { tag: 'Pending' }
-  | { tag: 'Running' }
-  | { tag: 'Complete' }
-  | { tag: 'Failed', error: string }
+type Status =
+  | { tag: "Pending" }
+  | { tag: "Running" }
+  | { tag: "Complete" }
+  | { tag: "Failed"; error: string };
 
 const statusMessage = (status: Status): string =>
   match(status, {
-    Pending: () => 'Waiting to start',
-    Running: () => 'In progress',
-    Complete: () => 'Done!',
+    Pending: () => "Waiting to start",
+    Running: () => "In progress",
+    Complete: () => "Done!",
     // Failed: ({ error }) => `Error: ${error}`
     // ❌ Error: missing case 'Failed'
-  })
+  });
 ```
 
 ### Nested Matching
 
 ```typescript
-type Either<L, R> = 
-  | { tag: 'Left', value: L }
-  | { tag: 'Right', value: R }
+type Either<L, R> =
+  | { tag: "Left"; value: L }
+  | { tag: "Right"; value: R };
 
 const nested = (x: Either<Option<number>, string>): string =>
   match(x, {
-    Left: ({ value }) => match(value, {
-      Some: ({ value: n }) => `Number: ${n}`,
-      None: () => 'No number'
-    }),
-    Right: ({ value }) => `String: ${value}`
-  })
+    Left: ({ value }) =>
+      match(value, {
+        Some: ({ value: n }) => `Number: ${n}`,
+        None: () => "No number",
+      }),
+    Right: ({ value }) => `String: ${value}`,
+  });
 ```
 
 ### Inline Pattern Matching (Sugar)
@@ -911,18 +907,21 @@ add5(3)  // 8
 
 ### What are Handlers?
 
-Handlers interpret effects, giving them concrete implementations. They use continuation-passing style to allow resumption.
+Handlers interpret effects, giving them concrete implementations. They use continuation-passing
+style to allow resumption.
 
 ### Handler Type
 
 ```typescript
-type Handler<Eff, R, Result> = {
-  [K in keyof Eff]: (
-    ...args: Parameters<Eff[K]>
-  ) => (resume: (result: ReturnType<Eff[K]>) => R) => R
-} & {
-  return: (value: Result) => R
-}
+type Handler<Eff, R, Result> =
+  & {
+    [K in keyof Eff]: (
+      ...args: Parameters<Eff[K]>
+    ) => (resume: (result: ReturnType<Eff[K]>) => R) => R;
+  }
+  & {
+    return: (value: Result) => R;
+  };
 ```
 
 ### State Handler
@@ -1050,19 +1049,16 @@ const runLogger = <R>(
 // Compose multiple handlers
 const runApp = <S>(
   initialState: S,
-  computation: () => void & State<S> & Console & Exception
+  computation: () => void & State<S> & Console & Exception,
 ) => {
-  const withException = () => 
-    Eff.tryCatch(() => computation())
-  
-  const withConsole = () =>
-    Eff.captureConsole(withException)
-  
-  const withState = () =>
-    Eff.runState(initialState, withConsole)
-  
-  return withState()
-}
+  const withException = () => Eff.tryCatch(() => computation());
+
+  const withConsole = () => Eff.captureConsole(withException);
+
+  const withState = () => Eff.runState(initialState, withConsole);
+
+  return withState();
+};
 ```
 
 ---
@@ -1073,12 +1069,12 @@ const runApp = <S>(
 
 ```typescript
 // Group related effects
-type DatabaseEffects = Database & Exception
-type ApiEffects = Http & Async & Exception
-type AppEffects = DatabaseEffects & ApiEffects & Console
+type DatabaseEffects = Database & Exception;
+type ApiEffects = Http & Async & Exception;
+type AppEffects = DatabaseEffects & ApiEffects & Console;
 
 // Use type aliases for clarity
-type UserService = (id: string) => User & ApiEffects
+type UserService = (id: string) => User & ApiEffects;
 ```
 
 ### Error Handling
@@ -1086,19 +1082,17 @@ type UserService = (id: string) => User & ApiEffects
 ```typescript
 // Use Result for expected errors
 const parseNumber = (str: string): Result<number, string> => {
-  const num = Number(str)
-  return isNaN(num) 
-    ? Res.Err('Invalid number')
-    : Res.Ok(num)
-}
+  const num = Number(str);
+  return isNaN(num) ? Res.Err("Invalid number") : Res.Ok(num);
+};
 
 // Use Exception for unexpected errors
 const divide = (a: number, b: number): number & Exception => {
   if (b === 0) {
-    effect(Exception.throw('Division by zero'))
+    effect(Exception.throw("Division by zero"));
   }
-  return a / b
-}
+  return a / b;
+};
 ```
 
 ### Composition Patterns
@@ -1128,27 +1122,28 @@ const workflow = (): void & AppEffects =>
 // Record updates
 const updatePerson = (p: Person, age: number): Person => ({
   ...p,
-  age
-})
+  age,
+});
 
 // Nested updates
 const updateAddress = (
   p: Person,
-  street: string
+  street: string,
 ): Person => ({
   ...p,
   address: {
     ...p.address,
-    street
-  }
-})
+    street,
+  },
+});
 
 // Array operations (always return new arrays)
-const addItem = <T>(arr: readonly T[], item: T): readonly T[] =>
-  [...arr, item]
+const addItem = <T>(arr: readonly T[], item: T): readonly T[] => [...arr, item];
 
-const removeAt = <T>(arr: readonly T[], index: number): readonly T[] =>
-  [...arr.slice(0, index), ...arr.slice(index + 1)]
+const removeAt = <T>(
+  arr: readonly T[],
+  index: number,
+): readonly T[] => [...arr.slice(0, index), ...arr.slice(index + 1)];
 ```
 
 ### Type-Driven Development
@@ -1187,19 +1182,15 @@ Effects are compiled to continuation-passing style (CPS):
 ```typescript
 // Source
 const program = (): number & State<number> => {
-  const x = effect(State.get<number>())
-  effect(State.put(x + 1))
-  return x * 2
-}
+  const x = effect(State.get<number>());
+  effect(State.put(x + 1));
+  return x * 2;
+};
 
 // Transpiled (simplified)
 const program = (handlers) => (k) => {
-  handlers.get()(x =>
-    handlers.put(x + 1)(() =>
-      k(x * 2)
-    )
-  )
-}
+  handlers.get()((x) => handlers.put(x + 1)(() => k(x * 2)));
+};
 ```
 
 ### Pattern Matching Compilation
@@ -1357,5 +1348,5 @@ const runApp = () => {
 
 ---
 
-**typelang v0.1.0** - Functional TypeScript with Algebraic Effects  
+**typelang v0.1.0** - Functional TypeScript with Algebraic Effects\
 © 2025 typelang contributors

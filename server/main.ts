@@ -1,7 +1,15 @@
 // server/main.ts
-import { compileRoutes, buildHandler } from "./router.ts";
-import { compose, withLogger, withErrorBoundary, withCors, withRateLimit, withStatic, withAuth } from "./middleware.ts";
-import { Routes, RequestCtx, ServerOptions } from "./types.ts";
+import { buildHandler, compileRoutes } from "./router.ts";
+import {
+  compose,
+  withAuth,
+  withCors,
+  withErrorBoundary,
+  withLogger,
+  withRateLimit,
+  withStatic,
+} from "./middleware.ts";
+import { RequestCtx, Routes, ServerOptions } from "./types.ts";
 import { parseQuery } from "./http.ts";
 import * as App from "../app/routes.ts";
 
@@ -27,8 +35,12 @@ export const createServer = (routes: Routes, opts: ServerOptions = {}) => {
   }, (req: Request) => {
     const url = new URL(req.url);
     const ctx: RequestCtx = { req, url, params: {}, query: parseQuery(url), locals: {} };
-    if (opts.basePath && !url.pathname.startsWith(opts.basePath)) return new Response("Not Found", { status: 404 });
-    const normalized = opts.basePath ? url.pathname.slice(opts.basePath.length) || "/" : url.pathname;
+    if (opts.basePath && !url.pathname.startsWith(opts.basePath)) {
+      return new Response("Not Found", { status: 404 });
+    }
+    const normalized = opts.basePath
+      ? url.pathname.slice(opts.basePath.length) || "/"
+      : url.pathname;
     const patched = { ...ctx, url: new URL(url.origin + normalized + url.search) };
     return handler(patched);
   });

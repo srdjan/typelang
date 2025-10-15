@@ -41,3 +41,5 @@ export const parseQuery = (url: URL): Readonly<Record<string, string | string[]>
   });
   return Object.fromEntries(obj);
 };
+
+export const isoNow = () => new Date().toISOString();
