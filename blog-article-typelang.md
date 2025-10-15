@@ -5,7 +5,7 @@ tags: [TypeScript, Functional Programming, Algebraic Effects, Language Design]
 excerpt: How we designed typelang to enforce functional programming principles while maintaining TypeScript compatibility, and why explicit effect tracking changes how teams reason about code.
 ---
 
-Continuing exploration of the possibilities of a strictly functional TypeScript subset with algebraic effects. 
+### Continuing exploration of the possibilities of a strictly functional TypeScript subset with algebraic effects. 
 
 Software systems grow complex not just from the problems they solve, but from the flexibility languages afford us. When teams can express same ideas in countless ways—mixing paradigms, hiding effects, and mutating state freely—codebases become difficult to understand and maintain. **typelang** seeks to explore ways of cutting down this complexity by **constraining how code can be written**. 
 

@@ -1,4 +1,4 @@
-# typelang v0.1 + Deno HTTP Server (Example Repo)
+# typelang v0.1: Exploration of a Strictly Functional TypeScript Subset
 
 Lean, functional TypeScript subset with algebraic-effects style APIs, a tiny handler runtime, and a
 **modern Deno HTTP server** that accepts externally-defined `Routes`.
