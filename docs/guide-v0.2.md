@@ -1,4 +1,4 @@
-# typelang v0.1.0 Language Guide
+# typelang v0.2.0 Language Guide
 
 *A functional TypeScript subset with algebraic effects*
 
@@ -462,4 +462,4 @@ console.log({ result, logs, state });
 
 ---
 
-That’s v0.1.0: a strict, Deno-native TS subset with algebraic effects, **iterator-free app ergonomics** (`seq`, `par`), explicit capabilities, and a tiny, composable runtime.
+That’s v0.2.0: a strict, Deno-native TS subset with algebraic effects, **iterator-free app ergonomics** (`seq`, `par`), explicit capabilities, and a tiny, composable runtime.
