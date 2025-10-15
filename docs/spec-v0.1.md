@@ -49,6 +49,8 @@ typelang embraces:
 typelang removes all object-oriented and imperative features:
 
 - ❌ Classes, `this`, prototypes, `new`
+- ❌ `if`/`else` (use exhaustive `match` instead)
+- ❌ Ternary `?:` (use exhaustive `match` instead)
 - ❌ `var`, `let` (only `const`)
 - ❌ `enum`, `namespace`, decorators
 - ❌ `for`, `while`, `do-while` loops

@@ -35,8 +35,8 @@ runtime to interpret effects via **handlers**.
   capabilities.
 - **Great ergonomics:** Write linear code with `seq()`, run concurrency with `par()`. No generators
   in app code.
-- **Strict subset:** We ban classes, mutation, loops, etc., and **enforce** it with Deno lint + an
-  AST subset check.
+- **Strict subset:** We ban classes, mutation, loops, `if`/`else`, etc., and **enforce** it with
+  Deno lint + a lightweight lexical subset check.
 
 ---
 
@@ -81,13 +81,13 @@ console.log(await runApp(both)); // see runApp in §9
 
 ## 3) Subset Rules (enforced in Deno)
 
-**Disallowed:** classes/`this`/`new`, `var`/`let`, loops (`for/while/do`), mutation (`++`, `--`,
-assignment expressions), enums, namespaces, decorators.
+**Disallowed:** classes/`this`/`new`, `if`/`else`, ternary `?:`, `var`/`let`, loops
+(`for/while/do`), mutation (`++`, `--`, assignment expressions), enums, namespaces, decorators.
 
 **How it’s enforced**
 
 - `deno lint` baseline + formatting.
-- A tiny `scripts/lint_subset.ts` (AST walker using `deno_ast`) fails CI on forbidden syntax.
+- A tiny `scripts/lint_subset.ts` (lexical scanner) fails CI on forbidden syntax.
 - You get a single `deno task lint` that enforces the subset project-wide.
 
 > Result → The _guide’s subset_ is not just documentation; it is **tool-enforced**.

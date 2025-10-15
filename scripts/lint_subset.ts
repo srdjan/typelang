@@ -168,18 +168,29 @@ const scan = (path: string, source: string): Diagnostic[] => {
         pushDiagnostic("Assignment expressions are not allowed (no mutation)", i);
         continue;
       }
+      if (ch === "?") {
+        if (next === "?" || next === ".") continue;
+        if (prev === "?") continue;
+        pushDiagnostic("`?:` conditional is not allowed; use `match()`", i);
+        continue;
+      }
 
       if (isIdentifierStart(ch)) {
         let j = i + 1;
         while (j < source.length && isIdentifierPart(source[j])) j++;
         const word = source.slice(i, j);
-        const ahead = source.slice(j).trimStart();
         switch (word) {
           case "class":
             pushDiagnostic("Classes are not allowed", i);
             break;
           case "this":
             pushDiagnostic("`this` is not allowed", i);
+            break;
+          case "if":
+            pushDiagnostic("`if`/`else` are not allowed; use `match()`", i);
+            break;
+          case "else":
+            pushDiagnostic("`if`/`else` are not allowed; use `match()`", i);
             break;
           case "new": {
             const rest = source.slice(j);

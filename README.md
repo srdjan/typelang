@@ -1,7 +1,7 @@
 # typelang v0.1 + Deno HTTP Server (Example Repo)
 
-Lean, functional TypeScript subset with (optional) algebraic-effects style APIs and a **modern Deno
-HTTP server** that accepts externally-defined `Routes`.
+Lean, functional TypeScript subset with algebraic-effects style APIs, a tiny handler runtime, and a
+**modern Deno HTTP server** that accepts externally-defined `Routes`.
 
 ## Run
 
@@ -16,14 +16,21 @@ deno task dev
 deno task lint
 ```
 
-This runs Deno's linter plus an AST-based subset checker that forbids: classes, `this`, `new`,
-loops, mutation (`++`, `--`, assignments), enums, namespaces, decorators, and `let`/`var`.
+This runs Deno's built-in linter plus a lexical subset checker that forbids: classes, `this`, `new`,
+`if`/`else`, ternary `?:`, loops, mutation (`++`, `--`, assignments), enums, namespaces,
+decorators, and `let`/`var`.
+
+## Test the runtime + subset tooling
+
+```bash
+deno test
+```
 
 ## Project layout
 
 ```
 typelang-repo/
-  typelang/        # minimal v0.1 helpers: Eff, defineEffect, seq, par, match, pipe
+  typelang/        # effect runtime + helpers: Eff, defineEffect, seq, par, handlers, match, pipe
   server/          # lean HTTP server + middleware + router
   app/             # external routes (the “input” to server)
   public/          # static assets (served at /static)
@@ -41,13 +48,11 @@ typelang-repo/
 
 ## Typelang (minimal surface used here)
 
-- `Eff<A,E>` phantom effect type (types only)
-- `defineEffect(name)` to declare typed ops (data)
-- `seq()` and `par` helpers (iterator-free) for linear & parallel steps
-- `match()` and `pipe()` utilities
-
-> The example server does not require effect handlers to run; the typelang helpers are included to
-> show how you would structure app logic in the subset without generators.
+- `Eff<A,E>` phantom effect type + `Combine` helper
+- `defineEffect(name)` to declare typed ops and capability specs
+- `stack(...handlers).run()` interpreter with built-in Console / State / Exception / Async handlers
+- `seq()` and `par` helpers (iterator-free) for linear & parallel steps that respect `Eff`
+- `match()` and `pipe()` utilities for expression-oriented control flow
 
 ---
 
