@@ -16,7 +16,7 @@ if ! deno task lint; then
 fi
 
 echo "→ Running tests..."
-if ! deno test --quiet; then
+if ! deno test --allow-read --allow-write --quiet; then
   echo "❌ Tests failed."
   exit 1
 fi

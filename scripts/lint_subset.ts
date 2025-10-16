@@ -31,9 +31,9 @@ const toLocator = (source: string) => {
 const isIdentifierStart = (ch: string) => /[A-Za-z$_]/.test(ch);
 const isIdentifierPart = (ch: string) => /[A-Za-z0-9$_]/.test(ch);
 
-type Diagnostic = Readonly<{ message: string; line: number; column: number }>;
+export type Diagnostic = Readonly<{ message: string; line: number; column: number }>;
 
-const scan = (path: string, source: string): Diagnostic[] => {
+export const scan = (path: string, source: string): Diagnostic[] => {
   const diagnostics: Diagnostic[] = [];
   const locate = toLocator(source);
 

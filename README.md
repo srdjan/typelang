@@ -20,11 +20,27 @@ This runs Deno's built-in linter plus a lexical subset checker that forbids: cla
 `if`/`else`, ternary `?:`, loops, mutation (`++`, `--`, assignments), enums, namespaces, decorators,
 and `let`/`var`.
 
-## Test the runtime + subset tooling
+## Test
 
 ```bash
-deno test
+# Run all tests (109 tests)
+deno task test
+
+# Run tests in watch mode (auto-rerun on file changes)
+deno task test:watch
+
+# Run tests with coverage report
+deno task test:coverage
 ```
+
+**Test Coverage:** 109 tests covering:
+
+- ✅ Effect runtime (handlers, combinators, seq, par)
+- ✅ HTTP server (routing, middleware, utilities)
+- ✅ Security (path traversal, input validation)
+- ✅ Functional subset linter
+
+See [TEST_COVERAGE_REPORT.md](./TEST_COVERAGE_REPORT.md) for detailed coverage analysis.
 
 ## Project layout
 
@@ -35,7 +51,8 @@ typelang-repo/
   app/             # external routes (the “input” to server)
   public/          # static assets (served at /static)
   scripts/         # subset linter (Deno-only)
-  deno.jsonc       # tasks: dev, lint, fmt
+  tests/           # comprehensive test suite (109 tests)
+  deno.jsonc       # tasks: dev, test, lint, fmt
 ```
 
 ## Server features

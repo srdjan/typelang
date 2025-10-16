@@ -2,6 +2,9 @@
   "$schema": "https://deno.land/x/deno/schemas/deno.schema.json",
   "tasks": {
     "dev": "deno run -A server/main.ts",
+    "test": "deno test --allow-read --allow-write",
+    "test:watch": "deno test --allow-read --allow-write --watch",
+    "test:coverage": "deno test --allow-read --allow-write --coverage=coverage && deno coverage coverage",
     "lint": "deno lint --quiet && deno run -A scripts/lint_subset.ts",
     "fmt": "deno fmt",
     "setup-hooks": "git config core.hooksPath .githooks && echo 'Git hooks configured!'"

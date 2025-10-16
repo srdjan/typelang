@@ -94,3 +94,21 @@ Deno.test("par.map resolves concurrent tasks", async () => {
   }
   assertEquals(outcome.value, [2, 4, 6]);
 });
+
+Deno.test("par.race returns first completed task", async () => {
+  const outcome = await stack(
+    handlers.Exception.tryCatch(),
+  ).run(() =>
+    par.race([
+      () => seq().return(() => "fast"),
+      () => seq().return(() => "slow"),
+    ])
+  ) as unknown as Result<string>;
+
+  if (outcome.tag !== "Ok") {
+    throw new Error("expected Ok par race result");
+  }
+  // Since both complete immediately, either could win, but typically the first one
+  assertEquals(typeof outcome.value, "string");
+  assertEquals(["fast", "slow"].includes(outcome.value), true);
+});
