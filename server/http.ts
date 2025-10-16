@@ -19,7 +19,7 @@ export const text = (body: string, init: ResponseInit = {}): Response =>
   });
 
 export const html = (body: string | Uint8Array, init: ResponseInit = {}): Response =>
-  new Response(body, {
+  new Response(body as BodyInit, {
     status: init.status ?? 200,
     headers: new Headers({
       "content-type": "text/html; charset=utf-8",

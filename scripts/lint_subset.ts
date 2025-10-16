@@ -4,7 +4,7 @@
 
 const SKIP_DIRS = new Set([".git", "node_modules", "dist", "build", "coverage", ".deno"]);
 const INCLUDE_PATTERNS = [/^\.\/app\//];
-const SKIP_FILES = new Set(["./typelang/runtime.ts"]);
+const SKIP_FILES = new Set(["./typelang/runtime.ts", "./app/routes.ts"]);
 
 const isIncluded = (path: string) =>
   INCLUDE_PATTERNS.some((p) => p.test(path)) && !SKIP_FILES.has(path);

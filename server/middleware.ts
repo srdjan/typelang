@@ -57,11 +57,27 @@ export const withRateLimit = (reqsPerMin: number): Middleware => {
 
 export const withStatic = (prefix: string, dir: string): Middleware => (next) => async (ctx) => {
   if (ctx.req.method !== "GET" || !ctx.url.pathname.startsWith(prefix)) return await next(ctx);
-  const path = ctx.url.pathname.slice(prefix.length).replace(/^\/+/, "");
-  const file = `${dir}/${path || "index.html"}`;
+
+  const requestedPath = ctx.url.pathname.slice(prefix.length).replace(/^\/+/, "");
+
+  // Security: prevent path traversal attacks
+  if (requestedPath.includes("..") || requestedPath.includes("\0")) {
+    return text("Forbidden", { status: 403 });
+  }
+
+  const file = `${dir}/${requestedPath || "index.html"}`;
+
   try {
-    const data = await Deno.readFile(file);
-    const ext = file.split(".").pop() ?? "";
+    // Security: ensure resolved path is within allowed directory
+    const realDir = await Deno.realPath(dir).catch(() => null);
+    const realFile = await Deno.realPath(file).catch(() => null);
+
+    if (!realDir || !realFile || !realFile.startsWith(realDir)) {
+      return text("Forbidden", { status: 403 });
+    }
+
+    const data = await Deno.readFile(realFile);
+    const ext = realFile.split(".").pop() ?? "";
     const type = ({
       "html": "text/html; charset=utf-8",
       "js": "application/javascript; charset=utf-8",

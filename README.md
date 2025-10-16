@@ -17,8 +17,8 @@ deno task lint
 ```
 
 This runs Deno's built-in linter plus a lexical subset checker that forbids: classes, `this`, `new`,
-`if`/`else`, ternary `?:`, loops, mutation (`++`, `--`, assignments), enums, namespaces,
-decorators, and `let`/`var`.
+`if`/`else`, ternary `?:`, loops, mutation (`++`, `--`, assignments), enums, namespaces, decorators,
+and `let`/`var`.
 
 ## Test the runtime + subset tooling
 

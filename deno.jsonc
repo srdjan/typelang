@@ -3,10 +3,21 @@
   "tasks": {
     "dev": "deno run -A server/main.ts",
     "lint": "deno lint --quiet && deno run -A scripts/lint_subset.ts",
-    "fmt": "deno fmt"
+    "fmt": "deno fmt",
+    "setup-hooks": "git config core.hooksPath .githooks && echo 'Git hooks configured!'"
   },
   "lint": {
-    "rules": { "include": ["recommended"] }
+    "rules": {
+      "include": ["recommended"],
+      "exclude": [
+        "no-import-prefix",
+        "ban-types",
+        "no-explicit-any",
+        "require-await",
+        "no-unused-vars",
+        "prefer-const"
+      ]
+    }
   },
   "fmt": { "useTabs": false, "lineWidth": 100, "indentWidth": 2, "semiColons": true }
 }

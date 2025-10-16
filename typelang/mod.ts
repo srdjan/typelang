@@ -50,6 +50,10 @@ type SeqBuilder<C> = {
     f: (ctx: Readonly<C>) => Eff<A, E>,
   ): SeqBuilder<C & Readonly<Record<K, A>>>;
   do<E>(f: (ctx: Readonly<C>) => Eff<unknown, E>): SeqBuilder<C>;
+  when<E>(
+    predicate: (ctx: Readonly<C>) => boolean,
+    thenBranch: (ctx: Readonly<C>) => Eff<unknown, E>,
+  ): SeqBuilder<C>;
   return<A, E>(f: (ctx: Readonly<C>) => Eff<A, E>): Eff<A, E>;
 };
 
@@ -73,6 +77,19 @@ const buildSeq = <C>(steps: readonly StepFn[]): SeqBuilder<C> => ({
   do<E>(f: (ctx: Readonly<C>) => Eff<unknown, E>) {
     const next: StepFn = async (ctx) => {
       await resolveEff(f(ctx as Readonly<C>));
+      return ctx;
+    };
+    return buildSeq<C>([...steps, next]);
+  },
+  when<E>(
+    predicate: (ctx: Readonly<C>) => boolean,
+    thenBranch: (ctx: Readonly<C>) => Eff<unknown, E>,
+  ) {
+    const next: StepFn = async (ctx) => {
+      const current = ctx as Readonly<C>;
+      if (predicate(current)) {
+        await resolveEff(thenBranch(current));
+      }
       return ctx;
     };
     return buildSeq<C>([...steps, next]);
@@ -132,9 +149,80 @@ export const match = <T extends { readonly tag: string }, R>(
   cases: { readonly [K in T["tag"]]: (v: Extract<T, { readonly tag: K }>) => R },
 ): R => {
   const handler = cases[value.tag as T["tag"]];
-  if (!handler) throw Error(`Non-exhaustive match for tag=${value.tag}`);
+  if (!handler) {
+    const available = Object.keys(cases).join(", ");
+    throw Error(
+      `Non-exhaustive match for tag="${value.tag}"\n` +
+        `Available cases: [${available}]\n` +
+        `Hint: Add a case for "${value.tag}"`,
+    );
+  }
   return handler(value as Extract<T, { readonly tag: typeof value.tag }>);
 };
 
-export const pipe = <A>(input: A, ...fns: ReadonlyArray<(x: unknown) => unknown>) =>
-  fns.reduce<unknown>((acc, fn) => fn(acc), input as unknown);
+type Fn<A, B> = (a: A) => B;
+
+export function pipe<A>(value: A): A;
+export function pipe<A, B>(value: A, fn1: Fn<A, B>): B;
+export function pipe<A, B, C>(value: A, fn1: Fn<A, B>, fn2: Fn<B, C>): C;
+export function pipe<A, B, C, D>(value: A, fn1: Fn<A, B>, fn2: Fn<B, C>, fn3: Fn<C, D>): D;
+export function pipe<A, B, C, D, E>(
+  value: A,
+  fn1: Fn<A, B>,
+  fn2: Fn<B, C>,
+  fn3: Fn<C, D>,
+  fn4: Fn<D, E>,
+): E;
+export function pipe<A, B, C, D, E, F>(
+  value: A,
+  fn1: Fn<A, B>,
+  fn2: Fn<B, C>,
+  fn3: Fn<C, D>,
+  fn4: Fn<D, E>,
+  fn5: Fn<E, F>,
+): F;
+export function pipe<A, B, C, D, E, F, G>(
+  value: A,
+  fn1: Fn<A, B>,
+  fn2: Fn<B, C>,
+  fn3: Fn<C, D>,
+  fn4: Fn<D, E>,
+  fn5: Fn<E, F>,
+  fn6: Fn<F, G>,
+): G;
+export function pipe<A, B, C, D, E, F, G, H>(
+  value: A,
+  fn1: Fn<A, B>,
+  fn2: Fn<B, C>,
+  fn3: Fn<C, D>,
+  fn4: Fn<D, E>,
+  fn5: Fn<E, F>,
+  fn6: Fn<F, G>,
+  fn7: Fn<G, H>,
+): H;
+export function pipe<A, B, C, D, E, F, G, H, I>(
+  value: A,
+  fn1: Fn<A, B>,
+  fn2: Fn<B, C>,
+  fn3: Fn<C, D>,
+  fn4: Fn<D, E>,
+  fn5: Fn<E, F>,
+  fn6: Fn<F, G>,
+  fn7: Fn<G, H>,
+  fn8: Fn<H, I>,
+): I;
+export function pipe<A, B, C, D, E, F, G, H, I, J>(
+  value: A,
+  fn1: Fn<A, B>,
+  fn2: Fn<B, C>,
+  fn3: Fn<C, D>,
+  fn4: Fn<D, E>,
+  fn5: Fn<E, F>,
+  fn6: Fn<F, G>,
+  fn7: Fn<G, H>,
+  fn8: Fn<H, I>,
+  fn9: Fn<I, J>,
+): J;
+export function pipe(value: unknown, ...fns: ReadonlyArray<Fn<unknown, unknown>>): unknown {
+  return fns.reduce((acc, fn) => fn(acc), value);
+}

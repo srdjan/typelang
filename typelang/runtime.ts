@@ -71,7 +71,14 @@ const resolveWithRuntime = async (
   }
   if (isInstr(value)) {
     if (!runtime) {
-      throw new Error(`Effect ${value._tag}.${value.kind} used outside of a runtime stack`);
+      const availableStacks = runtimeStack.length > 0
+        ? runtimeStack.map((r) => `[${r.handlers.map((h) => h.name).join(", ")}]`).join(" -> ")
+        : "none";
+      throw new Error(
+        `Effect ${value._tag}.${value.kind} used outside of a runtime stack\n` +
+          `Available runtime stacks: ${availableStacks}\n` +
+          `Hint: Wrap your code in stack(...handlers).run(() => ...)`,
+      );
     }
     const dispatched = await runtime.dispatch(value);
     return await resolveWithRuntime(dispatched, runtime);
@@ -81,7 +88,15 @@ const resolveWithRuntime = async (
 
 const createRuntime = (handlers: readonly Handler[]): RuntimeInstance => {
   const runHandler = (index: number, instr: AnyInstr): unknown | Promise<unknown> => {
-    if (index < 0) throw new Error(`Unhandled effect ${instr._tag}.${instr.kind}`);
+    if (index < 0) {
+      const availableHandlers = handlers.map((h) => h.name).join(", ");
+      throw new Error(
+        `Unhandled effect ${instr._tag}.${instr.kind}\n` +
+          `Available handlers: [${availableHandlers}]\n` +
+          `Missing handler for: ${instr._tag}\n` +
+          `Hint: Add handlers.${instr._tag}.<variant>() to your stack`,
+      );
+    }
     const handler = handlers[index];
     if (handler.name === instr._tag) {
       const fn = handler.handles[instr.kind];

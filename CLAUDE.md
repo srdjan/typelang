@@ -1,10 +1,12 @@
 # CLAUDE.md
 
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this
+repository.
 
 ## Overview
 
 **typelang** is a functional TypeScript subset with algebraic effects, featuring:
+
 - A strict functional programming subset enforced via custom linter
 - Algebraic effects runtime with handlers (similar to ZIO/Effekt)
 - Lightweight HTTP server with middleware composition
@@ -13,22 +15,27 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Development Commands
 
 ### Running the Application
+
 ```bash
 deno task dev        # Start development server with watch mode (-A for all permissions)
 ```
 
 ### Testing
+
 ```bash
 deno test            # Run all tests in the runtime and tooling
 ```
 
 ### Linting
+
 ```bash
 deno task lint       # Run Deno linter + custom subset checker
 deno fmt             # Format code
 ```
 
-The custom subset linter (`scripts/lint_subset.ts`) enforces strict functional rules on files matching `INCLUDE_PATTERNS` (currently `app/` directory). It forbids:
+The custom subset linter (`scripts/lint_subset.ts`) enforces strict functional rules on files
+matching `INCLUDE_PATTERNS` (currently `app/` directory). It forbids:
+
 - Classes, `this`, `new` (except `new Proxy`)
 - `if`/`else`, ternary `?:` (use `match()` instead)
 - Loops (`for`, `while`, `do`)
@@ -41,6 +48,7 @@ Files in `typelang/runtime.ts` and `server/` are exempt from subset checking.
 ## Project Architecture
 
 ### Directory Structure
+
 ```
 typelang/           # Effect runtime: Eff type, defineEffect, handlers, combinators
   mod.ts            # Public API: defineEffect, seq, par, match, pipe, handlers
@@ -98,6 +106,7 @@ const result = await stack(handler).run(() => program);
 ```
 
 **Built-in handlers** (in `handlers` object from `mod.ts`):
+
 - `Console.live()` / `Console.capture()` - logging with different capture modes
 - `Exception.tryCatch()` - converts effect failures to `{ tag: "Ok"|"Err" }` results
 - `State.with(initial)` - stateful computations
@@ -106,23 +115,25 @@ const result = await stack(handler).run(() => program);
 #### 2. Sequential & Parallel Combinators
 
 **seq()** - monadic sequential composition with named bindings:
+
 ```typescript
 seq()
   .let("user", () => fetchUser(id))
   .let("posts", (ctx) => fetchPosts(ctx.user.id))
   .do((ctx) => Console.log(`Found ${ctx.posts.length} posts`))
-  .return((ctx) => ({ user: ctx.user, posts: ctx.posts }))
+  .return((ctx) => ({ user: ctx.user, posts: ctx.posts }));
 ```
 
 **par** - parallel execution:
+
 ```typescript
 par.all({
   user: () => fetchUser(id),
-  posts: () => fetchPosts(id)
-})  // Returns { user: User, posts: Post[] }
+  posts: () => fetchPosts(id),
+}); // Returns { user: User, posts: Post[] }
 
-par.map([1,2,3], (x) => compute(x))  // Returns array of results
-par.race([() => fast(), () => slow()])  // First to complete
+par.map([1, 2, 3], (x) => compute(x)); // Returns array of results
+par.race([() => fast(), () => slow()]); // First to complete
 ```
 
 #### 3. HTTP Server (server/)
@@ -145,16 +156,19 @@ const server = createServer(routes, {
 ```
 
 **Middleware are functions** `(next: Handler) => Handler` that wrap the next handler:
+
 - Execution flows from outer to inner middleware
 - Built-in: `withLogger`, `withCors`, `withErrorBoundary`, `withRateLimit`, `withStatic`, `withAuth`
 - Composed with `compose(middlewares, terminal)`
 
 **Route matching**:
+
 - Paths support `:param` syntax (e.g., `/users/:id`)
 - Compiled to regex at startup (`compileRoutes`)
 - Params available in `ctx.params`
 
 **RequestCtx** passed to all handlers:
+
 ```typescript
 {
   req: Request,           // Native Request object
@@ -168,27 +182,30 @@ const server = createServer(routes, {
 #### 4. Functional Subset Enforcement
 
 The `app/` directory must follow strict subset rules checked by `lint_subset.ts`. This ensures:
+
 - **Pure data transformations**: No classes, no mutation, no side effects
 - **Expression-oriented**: Use `match()` instead of `if`/`else`, `pipe()` for composition
 - **Immutability**: Only `const` declarations allowed
 
 **Pattern matching** with `match()`:
+
 ```typescript
 match(result, {
   Ok: (v) => v.value,
-  Err: (e) => e.error
-})
+  Err: (e) => e.error,
+});
 ```
 
 **Function composition** with `pipe()`:
+
 ```typescript
 pipe(
   input,
   parseJson,
   validate,
   transform,
-  serialize
-)
+  serialize,
+);
 ```
 
 ## Testing Strategy
@@ -198,6 +215,7 @@ pipe(
 - **Integration tests**: Test routes with synthetic Request objects (no real HTTP server needed)
 
 Example testing pattern:
+
 ```typescript
 Deno.test("handler should...", async () => {
   const result = await stack(handler1, handler2).run(() => program);
@@ -212,7 +230,7 @@ Deno.test("handler should...", async () => {
 1. Define the effect in `typelang/effects.ts` (or inline):
    ```typescript
    export const MyEffect = defineEffect<"MyEffect", {
-     op1: (arg: T) => R
+     op1: (arg: T) => R;
    }>("MyEffect");
    ```
 
@@ -221,8 +239,8 @@ Deno.test("handler should...", async () => {
    export const myEffectHandler = (): Handler => ({
      name: "MyEffect",
      handles: {
-       op1: (instr, next) => { /* implementation */ }
-     }
+       op1: (instr, next) => {/* implementation */},
+     },
    });
    ```
 
@@ -265,6 +283,7 @@ Deno.test("handler should...", async () => {
 ## Configuration
 
 All configuration in `deno.jsonc`:
+
 - Tasks: `dev`, `lint`, `fmt`
 - Formatter: 2-space indent, 100 char line width, semicolons required
 - Linter: Recommended rules only

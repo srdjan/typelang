@@ -1,0 +1,24 @@
+#!/bin/bash
+set -e
+
+echo "Running pre-commit checks..."
+
+echo "→ Checking format..."
+if ! deno fmt --check; then
+  echo "❌ Format check failed. Run 'deno fmt' to fix."
+  exit 1
+fi
+
+echo "→ Running lint..."
+if ! deno task lint; then
+  echo "❌ Lint failed. Fix the issues above."
+  exit 1
+fi
+
+echo "→ Running tests..."
+if ! deno test --quiet; then
+  echo "❌ Tests failed."
+  exit 1
+fi
+
+echo "✓ All pre-commit checks passed!"
