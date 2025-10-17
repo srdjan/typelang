@@ -114,15 +114,26 @@ const result = await stack(handler).run(() => program);
 
 #### 2. Sequential & Parallel Combinators
 
-**seq()** - monadic sequential composition with named bindings:
+**seq()** - monadic sequential composition with chaining and named bindings:
 
 ```typescript
 seq()
   .let("user", () => fetchUser(id))
-  .let("posts", (ctx) => fetchPosts(ctx.user.id))
-  .do((ctx) => Console.log(`Found ${ctx.posts.length} posts`))
-  .return((ctx) => ({ user: ctx.user, posts: ctx.posts }));
+  .then((user) => fetchPosts(user.id))
+  .let("posts", (posts) => posts)
+  .tap((posts) => Console.log(`Found ${posts.length} posts`))
+  .return((posts, ctx) => ({ user: ctx!.user, posts }));
 ```
+
+Key seq() methods:
+
+- `.let(key, f)` - named binding (stored in context)
+- `.let(f)` - anonymous binding (becomes last value)
+- `.then(f)` - chain transformation on last value
+- `.tap(f)` - side effect with last value
+- `.do(f)` - action with (last, ctx)
+- `.value()` - return last value
+- `.return(f)` - close with f(last, ctx?)
 
 **par** - parallel execution:
 

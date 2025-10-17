@@ -66,10 +66,12 @@ type App =
 const tick = () =>
   seq()
     .let("s", () => State.get<{ n: number }>())
-    .let("next", ({ s }) => ({ n: s.n + 1 }))
-    .do(({ next }) => State.put(next))
-    .do(({ next }) => Console.log(`n=${next.n}`))
-    .return(({ next }) => next.n);
+    .then((s) => ({ n: s.n + 1 }))
+    .let("next", (next) => next)
+    .tap((next) => State.put(next))
+    .tap((next) => Console.log(`n=${next.n}`))
+    .then((next) => next.n)
+    .value();
 
 // Parallel: run two ticks concurrently
 const both = () =>
@@ -183,19 +185,27 @@ const addTodo = (
   text: string,
 ): Eff<string, Combine<ReturnType<typeof State.spec<AppState>>, typeof Exception.spec>> =>
   seq()
-    .do(() => guard(text.trim() !== "", () => Exception.op.fail({ tag: "InvalidInput" })))
+    .tap(() => guard(text.trim() !== "", () => Exception.op.fail({ tag: "InvalidInput" })))
     .let("s", () => State.get<AppState>())
-    .let("id", ({ s }) => `todo-${s.nextId}`)
-    .let("todo", ({ id }) => ({ id, text, completed: false }))
-    .do(({ s, todo }) => State.put<AppState>({ nextId: s.nextId + 1, todos: [...s.todos, todo] }))
-    .return(({ id }) => id);
+    .then((s) => `todo-${s.nextId}`)
+    .let("id", (id) => id)
+    .then((id) => ({ id, text, completed: false }))
+    .let("todo", (todo) => todo)
+    .do((todo, ctx) =>
+      State.put<AppState>({ nextId: ctx!.s.nextId + 1, todos: [...ctx!.s.todos, todo] })
+    )
+    .return((todo, ctx) => ctx!.id);
 ```
 
 **Primitives**
 
-- `.let(key, effOrPure)` binds a name to the result (effectful or pure).
-- `.do(eff)` performs an action, returns previous context.
-- `.return(f)` closes the builder with a pure value.
+- `.let(key, effOrPure)` binds a name to context (when key provided)
+- `.let(effOrPure)` anonymous binding, stores result as "last" value
+- `.then(f)` chains transformation on last value (like Promise.then)
+- `.tap(f)` performs side effect with last value, preserves last
+- `.do(f)` performs action with (last, ctx), preserves last
+- `.value()` returns the last value directly
+- `.return(f)` closes the builder with `f(last, ctx?)`
 
 ### 6.2 `par` — structured concurrency
 
@@ -420,24 +430,29 @@ export type AppCaps = ReturnType<typeof State.spec<AppState>> & ConsoleSpec & Ex
 // ops.ts
 export const addTodo = (text: string): Eff<TodoId, AppCaps> =>
   seq()
-    .do(() => guard(text.trim() !== "", () => Exception.op.fail({ tag: "InvalidInput" as const })))
+    .tap(() => guard(text.trim() !== "", () => Exception.op.fail({ tag: "InvalidInput" as const })))
     .let("s", () => State.get<AppState>())
-    .let("id", ({ s }) => `todo-${s.nextId}`)
-    .let("todo", ({ id }) => ({ id, text, completed: false } as Todo))
-    .do(({ s, todo }) => State.put<AppState>({ nextId: s.nextId + 1, todos: [...s.todos, todo] }))
-    .do(({ id }) => Console.log(`added ${id}`))
-    .return(({ id }) => id);
+    .then((s) => `todo-${s.nextId}`)
+    .let("id", (id) => id)
+    .then((id) => ({ id, text, completed: false } as Todo))
+    .let("todo", (todo) => todo)
+    .do((todo, ctx) =>
+      State.put<AppState>({ nextId: ctx!.s.nextId + 1, todos: [...ctx!.s.todos, todo] })
+    )
+    .tap((todo, ctx) => Console.log(`added ${ctx!.id}`))
+    .return((todo, ctx) => ctx!.id);
 
 export const toggleTodo = (id: TodoId): Eff<void, AppCaps> =>
   seq()
     .let("s", () => State.get<AppState>())
-    .let("idx", ({ s }) => s.todos.findIndex((t) => t.id === id))
-    .do(({ idx }) => guard(idx >= 0, () => Exception.op.fail({ tag: "NotFound", id })))
-    .do(({ s, idx }) => {
-      const t = s.todos[idx];
+    .then((s) => s.todos.findIndex((t) => t.id === id))
+    .let("idx", (idx) => idx)
+    .tap((idx) => guard(idx >= 0, () => Exception.op.fail({ tag: "NotFound", id })))
+    .do((idx, ctx) => {
+      const t = ctx!.s.todos[idx];
       const upd = { ...t, completed: !t.completed };
-      const todos = [...s.todos.slice(0, idx), upd, ...s.todos.slice(idx + 1)];
-      return State.put<AppState>({ ...s, todos });
+      const todos = [...ctx!.s.todos.slice(0, idx), upd, ...ctx!.s.todos.slice(idx + 1)];
+      return State.put<AppState>({ ...ctx!.s, todos });
     })
     .do(() => Console.log(`toggled ${id}`))
     .return(() => undefined);
@@ -487,7 +502,14 @@ console.log({ result, logs, state });
 
 - `type Eff<A,E>`; `Pure<A>`; `Combine<E1,E2>`
 - `defineEffect<Name, Spec>(name)`
-- `seq().let(k, eff).do(eff).return(f)`
+- `seq().let(key?, f).then(f).tap(f).do(f).value() / .return(f)`
+  - `.let(key, f)` - named binding (adds to context)
+  - `.let(f)` - anonymous binding (becomes last value)
+  - `.then(f)` - chain transformation on last value
+  - `.tap(f)` - side effect with last value
+  - `.do(f)` - action with (last, ctx)
+  - `.value()` - return last value directly
+  - `.return(f)` - close with f(last, ctx?)
 - `par.all(record)`, `par.map(xs, f)`, `par.race(thunks)`, `par.any(thunks)`
 - `match(value, cases)`, `pipe(x, ...fns)`
 
