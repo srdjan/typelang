@@ -172,9 +172,35 @@ const loadData = () =>
   },
 ] as const;
 
-const renderComparisonWidget = (activeId: string): string => {
+const renderComparisonContent = (activeId: string): string => {
   const active = comparisonExamples.find((ex) => ex.id === activeId) ?? comparisonExamples[0];
 
+  const issues = active.traditional.issues
+    .map((issue) => `<li class="issue-item">❌ ${escapeHtml(issue)}</li>`)
+    .join("");
+
+  const benefits = active.typelang.benefits
+    .map((benefit) => `<li class="benefit-item">✅ ${escapeHtml(benefit)}</li>`)
+    .join("");
+
+  return `<div class="comparison-split">
+    <div class="comparison-side comparison-side--traditional">
+      <h4>Traditional TypeScript</h4>
+      <pre class="code-preview"><code>${highlightTypeScript(active.traditional.code)}</code></pre>
+      <ul class="comparison-notes">${issues}</ul>
+    </div>
+    <div class="comparison-divider">
+      <span class="comparison-arrow">→</span>
+    </div>
+    <div class="comparison-side comparison-side--typelang">
+      <h4>typelang</h4>
+      <pre class="code-preview"><code>${highlightTypeScript(active.typelang.code)}</code></pre>
+      <ul class="comparison-notes">${benefits}</ul>
+    </div>
+  </div>`;
+};
+
+const renderComparisonWidget = (activeId: string): string => {
   const tabs = comparisonExamples
     .map((ex) => {
       const activeClass = match(toBoolTag(ex.id === activeId), {
@@ -193,34 +219,10 @@ const renderComparisonWidget = (activeId: string): string => {
     })
     .join("");
 
-  const issues = active.traditional.issues
-    .map((issue) => `<li class="issue-item">❌ ${escapeHtml(issue)}</li>`)
-    .join("");
-
-  const benefits = active.typelang.benefits
-    .map((benefit) => `<li class="benefit-item">✅ ${escapeHtml(benefit)}</li>`)
-    .join("");
-
   return `<div class="comparison-widget">
     <div class="comparison-tabs">${tabs}</div>
     <div id="comparison-content" class="comparison-content">
-      <div class="comparison-split">
-        <div class="comparison-side comparison-side--traditional">
-          <h4>Traditional TypeScript</h4>
-          <pre class="code-preview"><code>${
-    highlightTypeScript(active.traditional.code)
-  }</code></pre>
-          <ul class="comparison-notes">${issues}</ul>
-        </div>
-        <div class="comparison-divider">
-          <span class="comparison-arrow">→</span>
-        </div>
-        <div class="comparison-side comparison-side--typelang">
-          <h4>typelang</h4>
-          <pre class="code-preview"><code>${highlightTypeScript(active.typelang.code)}</code></pre>
-          <ul class="comparison-notes">${benefits}</ul>
-        </div>
-      </div>
+      ${renderComparisonContent(activeId)}
     </div>
   </div>`;
 };
@@ -497,5 +499,5 @@ export const renderLandingPage = (): string => {
 
 // Comparison widget partial (for HTMX updates)
 export const renderComparisonWidgetPartial = (exampleId: string): string => {
-  return renderComparisonWidget(exampleId);
+  return renderComparisonContent(exampleId);
 };
