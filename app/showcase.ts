@@ -38,7 +38,7 @@ type DemoConsole = Readonly<{
   errors: readonly string[];
 }>;
 
-type NormalizedRun = Readonly<{
+export type NormalizedRun = Readonly<{
   outcome: Outcome;
   state: unknown | null;
   console: DemoConsole;

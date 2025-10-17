@@ -17,7 +17,7 @@ const baseCtx = (method: string, url: string): RequestCtx => {
   };
 };
 
-Deno.test("GET / renders showcase landing page", async () => {
+Deno.test("GET / renders landing page", async () => {
   const route = findRoute("GET", "/");
   if (!route) throw new Error("GET / route missing");
 
@@ -25,8 +25,8 @@ Deno.test("GET / renders showcase landing page", async () => {
   const body = await res.text();
 
   assertEquals(res.status, 200);
-  assertStringIncludes(body, "typelang × Deno Showcase");
-  assertStringIncludes(body, "Effect Demos");
+  assertStringIncludes(body, "What if TypeScript");
+  assertStringIncludes(body, "purely functional");
 });
 
 Deno.test("GET /showcase/workflow returns demo card", async () => {

@@ -1,10 +1,15 @@
 // app/routes.ts
 import { Routes } from "../server/types.ts";
 import { html, isoNow, json, redirect } from "../server/http.ts";
-import { demos, runDemo } from "./showcase.ts";
+import { demos, type NormalizedRun, runDemo } from "./showcase.ts";
 import type { DemoRun, ShowcaseDemo } from "./showcase.ts";
+import { additionalDemos } from "./demos_additional.ts";
 import { highlightCode } from "../server/highlight.ts";
 import { match } from "../typelang/match.ts";
+import { seq } from "../typelang/mod.ts";
+import { Console, State } from "../typelang/effects.ts";
+import { renderComparisonWidgetPartial, renderLandingPage } from "./pages/landing.ts";
+import { renderLearnBasicsPage } from "./pages/learn_basics.ts";
 
 const ok = <T>(data: T) => json({ ok: true, data });
 
@@ -72,12 +77,14 @@ const highlights: readonly Highlight[] = [
   },
 ] as const;
 
-const renderPage = (selected: ShowcaseDemo, run: DemoRun): string => {
-  const navItems = demos.map((demo) => renderNavItem(demo, selected.id)).join("");
-  const featureCards = highlights.map(renderHighlightCard).join("");
-  const showcaseCard = renderDemoCard(selected, run);
+// Helper function to render page - needs access to allDemos
+const makeRenderPage =
+  (allDemos: readonly ShowcaseDemo[]) => (selected: ShowcaseDemo, run: DemoRun): string => {
+    const navItems = allDemos.map((demo) => renderNavItem(demo, selected.id)).join("");
+    const featureCards = highlights.map(renderHighlightCard).join("");
+    const showcaseCard = renderDemoCard(selected, run);
 
-  return `<!doctype html>
+    return `<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
@@ -148,7 +155,7 @@ const renderPage = (selected: ShowcaseDemo, run: DemoRun): string => {
     </footer>
   </body>
 </html>`;
-};
+  };
 
 const renderNavItem = (demo: ShowcaseDemo, activeId: string): string => {
   const active = toBoolTag(demo.id === activeId);
@@ -351,13 +358,90 @@ const renderState = (state: unknown | null): string => {
   });
 };
 
+// Merge all demos
+const allDemos = [...demos, ...additionalDemos] as const;
+
+// Create renderPage with allDemos
+const renderPage = makeRenderPage(allDemos);
+
 export const routes: Routes = [
   { method: "GET", path: "/health", handler: () => ok({ status: "ok", at: isoNow() }) },
   {
     method: "GET",
     path: "/",
+    handler: () => html(renderLandingPage()),
+  },
+  {
+    method: "GET",
+    path: "/landing",
+    handler: () => redirect("/"),
+  },
+  {
+    method: "GET",
+    path: "/learn",
+    handler: () => redirect("/learn/basics"),
+  },
+  {
+    method: "GET",
+    path: "/learn/basics",
+    handler: () => html(renderLearnBasicsPage()),
+  },
+  {
+    method: "GET",
+    path: "/comparison-widget/:id",
+    handler: ({ params }) => html(renderComparisonWidgetPartial(params.id)),
+  },
+  {
+    method: "POST",
+    path: "/api/mini-demo",
     handler: async () => {
-      const [first] = demos;
+      const miniDemo = {
+        id: "mini",
+        title: "Mini Counter",
+        tagline: "Quick demo",
+        summary: [],
+        features: [],
+        effectHandlers: [],
+        code: "",
+        state: { initial: { count: 0 }, label: "Counter" },
+        usesAsync: false,
+        program: () =>
+          seq()
+            .let("s", () => State.get<{ count: number }>())
+            .let("next", ({ s }) => ({ count: s.count + 1 }))
+            .do(({ next }) => Console.op.log(`Count: ${next.count}`))
+            .do(({ next }) => State.put(next))
+            .return(({ next }) => next.count),
+        present: (run: NormalizedRun) => ({
+          status: "ok" as const,
+          headline: `Counter incremented`,
+          detail: [],
+          artifacts: [],
+          console: run.console,
+          state: run.state,
+          timeline: [],
+          elapsedMs: run.elapsedMs,
+        }),
+      };
+      const run = await runDemo(miniDemo);
+      const consoleOutput = run.console.logs.map((log) => `<div>${escapeHtml(log)}</div>`).join("");
+      const stateOutput = run.state
+        ? `<div>State: ${escapeHtml(JSON.stringify(run.state))}</div>`
+        : "";
+      return html(`<div class="hero-demo__result">
+        <strong>Console Output:</strong>
+        ${consoleOutput}
+        <strong>Final State:</strong>
+        ${stateOutput}
+        <p class="hero-demo__success">✅ Executed in ${run.elapsedMs}ms</p>
+      </div>`);
+    },
+  },
+  {
+    method: "GET",
+    path: "/demos",
+    handler: async () => {
+      const [first] = allDemos;
       const run = await runDemo(first);
       return html(renderPage(first, run));
     },
@@ -366,7 +450,7 @@ export const routes: Routes = [
     method: "GET",
     path: "/showcase/:id",
     handler: async ({ params }) => {
-      const selected = option(demos.find((d) => d.id === params.id) ?? null);
+      const selected = option(allDemos.find((d) => d.id === params.id) ?? null);
       return await match(selected, {
         Some: async ({ value }) => {
           const run = await runDemo(value);
@@ -378,10 +462,25 @@ export const routes: Routes = [
     },
   },
   {
+    method: "GET",
+    path: "/demos/:id",
+    handler: async ({ params }) => {
+      const selected = option(allDemos.find((d) => d.id === params.id) ?? null);
+      return await match(selected, {
+        Some: async ({ value }) => {
+          const run = await runDemo(value);
+          return html(renderPage(value, run));
+        },
+        None: async () =>
+          html(`<div class="demo-card__empty">Demo not found.</div>`, { status: 404 }),
+      });
+    },
+  },
+  {
     method: "POST",
     path: "/showcase/:id/run",
     handler: async ({ params }) => {
-      const selected = option(demos.find((d) => d.id === params.id) ?? null);
+      const selected = option(allDemos.find((d) => d.id === params.id) ?? null);
       return await match(selected, {
         Some: async ({ value }) => {
           const run = await runDemo(value);

@@ -5,9 +5,16 @@
 const SKIP_DIRS = new Set([".git", "node_modules", "dist", "build", "coverage", ".deno"]);
 const INCLUDE_PATTERNS = [/^\.\/app\//];
 const SKIP_FILES = new Set(["./typelang/runtime.ts"]);
+const SKIP_PATTERNS = [
+  /^\.\/app\/pages\//, // UI rendering code
+  /^\.\/app\/components\//, // Reusable UI components
+  /^\.\/app\/routes\.ts$/, // Route definitions (allow mutation in render functions)
+];
 
 const isIncluded = (path: string) =>
-  INCLUDE_PATTERNS.some((p) => p.test(path)) && !SKIP_FILES.has(path);
+  INCLUDE_PATTERNS.some((p) => p.test(path)) &&
+  !SKIP_FILES.has(path) &&
+  !SKIP_PATTERNS.some((p) => p.test(path));
 
 const toLocator = (source: string) => {
   const offsets = [0];
