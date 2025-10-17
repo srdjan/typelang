@@ -13,7 +13,7 @@ effects, and mutating state freely—codebases become difficult to understand an
 **typelang** seeks to explore ways of cutting down this complexity by **constraining how code can be
 written**.
 
-So: what happens when we constrain how code can be written, making effects explicit and enforcing
+So, what happens when we constrain how code can be written, making effects explicit and enforcing
 functional purity?
 
 **typelang** is a disciplined subset of TypeScript that combines three core ideas: a strict
@@ -23,6 +23,10 @@ Deno. These constraints emerged from a fundamental belief: **the code we cannot 
 important as the code we can**.
 
 GitHub repo: [https://github.com/srdjan/typelang](https://github.com/srdjan/typelang)
+
+🔹 I like learning by thinkering around, and that is the purpose of this project... For production,
+though, use [Effect-TS](https://github.com/Effect-TS/effect) or
+[Effection](https://github.com/thefrontside/effection)
 
 This article describes the principles behind **typelang**, how the constraint system works, and what
 we've learned from building software this way.
@@ -155,8 +159,18 @@ const httpHandler: Handler = {
   },
 };
 
-// Run program with handler
-const result = await stack(httpHandler).run(() => fetchUser("123"));
+// Compose effects in a program
+const buildUserProfile = (userId: string) =>
+  seq()
+    .let("user", () => fetchUser(userId))
+    .let("posts", ({ user }) => Http.op.get(`/users/${user.id}/posts`))
+    .do(({ user, posts }) => Console.op.log(`${user.name} has ${posts.length} posts`))
+    .return(({ user, posts }) => ({ user, posts }));
+
+// Run program with handler stack
+const result = await stack(httpHandler, handlers.Console.live()).run(
+  () => buildUserProfile("123"),
+);
 ```
 
 This design **decouples effect declaration from implementation**. Application code describes what it
@@ -165,15 +179,30 @@ we use real network calls. The application code never changes.
 
 ### Built-in Effect Handlers
 
-The runtime includes standard handlers for common needs:
+The runtime includes standard handlers for common needs (available in the `handlers` object):
 
-- **Console** - Logging with live output or capture modes
-- **Exception** - Converting failures to `Result<T, E>` types
-- **State** - Stateful computations with explicit get/put operations
-- **Async** - Sleep and promise handling
+- **Console.live()** - Logging with immediate output to console
+- **Console.capture()** - Logging with messages captured in an array
+- **Exception.tryCatch()** - Converting failures to `{ tag: "Ok" | "Err" }` results
+- **State.with(initial)** - Stateful computations with explicit get/modify operations
+- **Async.default()** - Async operations (sleep, promise handling)
 
 These handlers compose in the stack. A program can use Console, State, and Exception together, and
-the runtime coordinates their interactions.
+the runtime coordinates their interactions. For example:
+
+```typescript
+const result = await stack(
+  handlers.State.with({ count: 0 }),
+  handlers.Console.live(),
+  handlers.Exception.tryCatch(),
+).run(() =>
+  seq()
+    .tap(() => State.op.modify<{ count: number }>((s) => ({ count: s.count + 1 })))
+    .let(() => State.op.get<{ count: number }>())
+    .do((state) => Console.op.log(`Count: ${state.count}`))
+    .value()
+);
+```
 
 ## Sequential and Parallel Composition
 
@@ -183,19 +212,62 @@ parallel execution.
 
 ### Sequential Composition with Named Bindings
 
-The `seq()` builder creates pipelines where each step can reference previous results:
+The `seq()` builder creates pipelines where each step can reference previous results through a typed
+context:
+
+```typescript
+// Named bindings create a typed context
+seq()
+  .let("user", () => fetchUser(id))
+  .let("posts", ({ user }) => fetchPosts(user.id))
+  .do(({ posts }) => Console.op.log(`Found ${posts.length} posts`))
+  .return(({ user, posts }) => ({ user, posts }));
+
+// Chain transformations with .then() (like Promise.then)
+seq()
+  .let(() => fetchUser(id))
+  .then((user) => user.email)
+  .tap((email) => Console.op.log(`Email: ${email}`))
+  .value();
+
+// Anonymous .let() for intermediate values
+seq()
+  .let(() => Http.op.get("/config"))
+  .let((config) => Http.op.get(config.endpoint))
+  .then((response) => response.json())
+  .value();
+```
+
+Each `.let(key, fn)` adds a named binding to the context. The function receives both the last value
+and the accumulated context, allowing access to all previous bindings. Anonymous `.let(fn)` updates
+only the last value without storing in context—useful for transformations you don't need to
+reference later. TypeScript infers the context type automatically—no manual annotations needed.
+
+Key seq() methods:
+
+- `.let(key, f)` - named binding (stored in context and becomes last value)
+- `.let(f)` - anonymous binding (becomes last value, not stored in context)
+- `.then(f)` - chain transformation on last value (like Promise.then)
+- `.tap(f)` - side effect with last value only
+- `.do(f)` - side effect with last value and context
+- `.when(pred, f)` - conditional execution based on predicate
+- `.value()` - return last value directly
+- `.return(f)` - close pipeline with transformation
+
+The `.when()` method enables conditional logic within the subset's constraints:
 
 ```typescript
 seq()
   .let("user", () => fetchUser(id))
-  .let("posts", (ctx) => fetchPosts(ctx.user.id))
-  .do((ctx) => Console.log(`Found ${ctx.posts.length} posts`))
-  .return((ctx) => ({ user: ctx.user, posts: ctx.posts }));
+  .when(
+    ({ user }) => user.premium,
+    ({ user }) => Console.op.log(`Premium user: ${user.name}`),
+  )
+  .return(({ user }) => user);
 ```
 
-Each `.let()` adds a named binding to the context. Subsequent steps receive an immutable context
-object with all previous bindings. This style is monadic—operations chain while maintaining
-immutability. The return type correctly tracks accumulated effects.
+This style is monadic—operations chain while maintaining immutability. The context is frozen after
+each step, and the type system tracks accumulated effects across the entire pipeline.
 
 ### Parallel Execution
 
