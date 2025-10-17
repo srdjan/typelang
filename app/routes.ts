@@ -10,6 +10,9 @@ import { seq } from "../typelang/mod.ts";
 import { Console, State } from "../typelang/effects.ts";
 import { renderComparisonWidgetPartial, renderLandingPage } from "./pages/landing.ts";
 import { renderLearnBasicsPage } from "./pages/learn_basics.ts";
+import { renderLearnEffectsPage } from "./pages/learn_effects.ts";
+import { renderLearnHandlersPage } from "./pages/learn_handlers.ts";
+import { renderComparisonPage } from "./pages/comparison.ts";
 
 const ok = <T>(data: T) => json({ ok: true, data });
 
@@ -385,6 +388,21 @@ export const routes: Routes = [
     method: "GET",
     path: "/learn/basics",
     handler: () => html(renderLearnBasicsPage()),
+  },
+  {
+    method: "GET",
+    path: "/learn/effects",
+    handler: () => html(renderLearnEffectsPage()),
+  },
+  {
+    method: "GET",
+    path: "/learn/handlers",
+    handler: () => html(renderLearnHandlersPage()),
+  },
+  {
+    method: "GET",
+    path: "/comparison",
+    handler: () => html(renderComparisonPage()),
   },
   {
     method: "GET",
