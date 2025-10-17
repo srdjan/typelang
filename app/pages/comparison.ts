@@ -475,8 +475,8 @@ export const renderComparisonPage = (): string => {
     <meta name="description" content="Side-by-side comparisons of traditional TypeScript vs typelang: mutation, control flow, async, error handling, testing, and composition." />
     <meta name="color-scheme" content="light dark" />
     <script src="https://unpkg.com/htmx.org@2.0.3"></script>
-    <link rel="stylesheet" href="/static/app.css" />
-    <link rel="stylesheet" href="/static/comparison.css" />
+    <link rel="stylesheet" href="/static/app.css?v=4" />
+    <link rel="stylesheet" href="/static/comparison.css?v=4" />
   </head>
   <body class="comparison-page">
     <header class="comparison-header">

@@ -31,6 +31,39 @@ const escapeHtml = (s: string) =>
   )
     .replaceAll("'", "&#039;");
 
+// Simple syntax highlighter for TypeScript
+export const highlightTypeScript = (code: string): string => {
+  // Combined regex that matches all token types in one pass
+  // Order matters: comments, strings, keywords, effects, functions, operators, numbers
+  const tokenPattern =
+    /(\/\/.*$|\/\*[\s\S]*?\*\/)|("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|`(?:[^`\\]|\\.)*`)|\b(const|let|var|function|return|if|else|for|while|do|break|continue|async|await|type|interface|class|extends|implements|import|export|from|as|default|case|switch|throw|try|catch|finally|new|this|super|static|public|private|protected|readonly|enum|namespace|declare|module|void|never|unknown|any|null|undefined|true|false)\b|\b(Console|State|Async|Exception)\.op\.[a-zA-Z_$][\w$]*|\b([a-zA-Z_$][\w$]*)\s*(?=\()|(=>|\.\.\.|\?\?|&&|\|\||[+\-*/%<>=!&|^~?:])|\b(\d+\.?\d*|\.\d+)\b/gm;
+
+  const result = code.replace(
+    tokenPattern,
+    (match, comment, string, keyword, effect, func, operator, number) => {
+      const escaped = escapeHtml(match);
+      if (comment) return `<span class="token comment">${escaped}</span>`;
+      if (string) return `<span class="token string">${escaped}</span>`;
+      if (keyword) return `<span class="token keyword">${escaped}</span>`;
+      if (effect) return `<span class="token effect">${escaped}</span>`;
+      if (func) return `<span class="token function">${escapeHtml(func)}</span>`;
+      if (operator) return `<span class="token operator">${escaped}</span>`;
+      if (number) return `<span class="token number">${escaped}</span>`;
+      return escaped;
+    },
+  );
+
+  // Escape any remaining unmatched characters and handle template interpolations
+  return result
+    .split(/(<span[^>]*>.*?<\/span>)/)
+    .map((part, i) =>
+      i % 2 === 0
+        ? escapeHtml(part).replace(/\$\{([^}]+)\}/g, '<span class="token interpolation">$&</span>')
+        : part
+    )
+    .join("");
+};
+
 // Button component
 type ButtonVariant = "primary" | "outline" | "ghost";
 type ButtonSize = "sm" | "md" | "lg";
@@ -199,10 +232,14 @@ export const renderCodeBlock = (block: CodeBlock): string => {
     False: () => "",
   });
 
+  const highlightedCode = block.language === "typescript" || block.language === "ts"
+    ? highlightTypeScript(block.code)
+    : escapeHtml(block.code);
+
   return `<div class="code-block-wrapper">
     <pre class="code-block${lineNumbersClass}"><code class="language-${
     escapeHtml(block.language)
-  }" data-filename="${escapeHtml(filenameLabel)}">${escapeHtml(block.code)}</code></pre>
+  }" data-filename="${escapeHtml(filenameLabel)}">${highlightedCode}</code></pre>
   </div>`;
 };
 
@@ -366,7 +403,7 @@ export const renderPageLayout = (layout: PageLayout): string => {
     <meta name="description" content="${escapeHtml(layout.description)}" />
     <meta name="color-scheme" content="light dark" />
     <script src="https://unpkg.com/htmx.org@2.0.3"></script>
-    <link rel="stylesheet" href="/static/app.css" />
+    <link rel="stylesheet" href="/static/app.css?v=4" />
   </head>
   <body>
     ${renderNav(layout.nav)}

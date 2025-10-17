@@ -348,8 +348,8 @@ export const renderLearnEffectsPage = (): string => {
     <meta name="description" content="Master algebraic effects in typelang: what they are, how to define custom effects, built-in effects, and composition patterns." />
     <meta name="color-scheme" content="light dark" />
     <script src="https://unpkg.com/htmx.org@2.0.3"></script>
-    <link rel="stylesheet" href="/static/app.css" />
-    <link rel="stylesheet" href="/static/learn.css" />
+    <link rel="stylesheet" href="/static/app.css?v=4" />
+    <link rel="stylesheet" href="/static/learn.css?v=4" />
   </head>
   <body class="learn-page">
     <header class="learn-header">

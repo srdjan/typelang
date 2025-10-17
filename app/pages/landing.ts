@@ -5,6 +5,7 @@ import { match } from "../../typelang/match.ts";
 import {
   type Badge,
   type Button,
+  highlightTypeScript,
   renderBadge,
   renderButton,
   renderCard,
@@ -206,7 +207,9 @@ const renderComparisonWidget = (activeId: string): string => {
       <div class="comparison-split">
         <div class="comparison-side comparison-side--traditional">
           <h4>Traditional TypeScript</h4>
-          <pre class="code-preview"><code>${escapeHtml(active.traditional.code)}</code></pre>
+          <pre class="code-preview"><code>${
+    highlightTypeScript(active.traditional.code)
+  }</code></pre>
           <ul class="comparison-notes">${issues}</ul>
         </div>
         <div class="comparison-divider">
@@ -214,7 +217,7 @@ const renderComparisonWidget = (activeId: string): string => {
         </div>
         <div class="comparison-side comparison-side--typelang">
           <h4>typelang</h4>
-          <pre class="code-preview"><code>${escapeHtml(active.typelang.code)}</code></pre>
+          <pre class="code-preview"><code>${highlightTypeScript(active.typelang.code)}</code></pre>
           <ul class="comparison-notes">${benefits}</ul>
         </div>
       </div>
@@ -296,16 +299,18 @@ const renderHeroDemo = (): string => {
     disabled: false,
   };
 
-  return `<div class="hero-demo">
-    <div class="hero-demo__code">
-      <pre class="code-preview"><code>// Counter with Console + State
+  const heroCode = `// Counter with Console + State
 const tick = () =>
   seq()
     .let("s", () => State.get<{count: number}>())
     .let("next", ({s}) => ({count: s.count + 1}))
     .do(({next}) => Console.op.log(\`Count: \${next.count}\`))
     .do(({next}) => State.put(next))
-    .return(({next}) => next.count);</code></pre>
+    .return(({next}) => next.count);`;
+
+  return `<div class="hero-demo">
+    <div class="hero-demo__code">
+      <pre class="code-preview"><code>${highlightTypeScript(heroCode)}</code></pre>
     </div>
     <div class="hero-demo__controls">
       ${renderButton(miniDemoBtn)}
@@ -406,8 +411,8 @@ export const renderLandingPage = (): string => {
     <meta property="og:description" content="Build reliable software with effect tracking, enforced purity, and zero runtime errors." />
     <meta property="og:type" content="website" />
     <script src="https://unpkg.com/htmx.org@2.0.3"></script>
-    <link rel="stylesheet" href="/static/app.css" />
-    <link rel="stylesheet" href="/static/landing.css" />
+    <link rel="stylesheet" href="/static/app.css?v=4" />
+    <link rel="stylesheet" href="/static/landing.css?v=4" />
   </head>
   <body class="landing-page">
     <header class="landing-hero">

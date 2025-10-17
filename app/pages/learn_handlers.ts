@@ -429,8 +429,8 @@ export const renderLearnHandlersPage = (): string => {
     <meta name="description" content="Master handler composition in typelang: built-in handlers, writing custom handlers, and composing handler stacks for complex programs." />
     <meta name="color-scheme" content="light dark" />
     <script src="https://unpkg.com/htmx.org@2.0.3"></script>
-    <link rel="stylesheet" href="/static/app.css" />
-    <link rel="stylesheet" href="/static/learn.css" />
+    <link rel="stylesheet" href="/static/app.css?v=4" />
+    <link rel="stylesheet" href="/static/learn.css?v=4" />
   </head>
   <body class="learn-page">
     <header class="learn-header">
