@@ -52,9 +52,10 @@ Deno.test("state handler tracks mutations immutably", async () => {
     handlers.Exception.tryCatch(),
   ).run(() =>
     seq()
-      .do(() => State.modify<{ count: number }>((s) => ({ count: s.count + 1 })))
-      .let("state", () => State.get<{ count: number }>())
-      .return(({ state }) => state.count)
+      .tap(() => State.modify<{ count: number }>((s) => ({ count: s.count + 1 })))
+      .let(() => State.get<{ count: number }>())
+      .then((state) => state.count)
+      .value()
   ) as unknown as WithState<number, { count: number }>;
 
   assertEquals(outcome.state.count, 1);

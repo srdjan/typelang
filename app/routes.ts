@@ -426,10 +426,11 @@ export const routes: Routes = [
         program: () =>
           seq()
             .let("s", () => State.get<{ count: number }>())
-            .let("next", ({ s }) => ({ count: s.count + 1 }))
-            .do(({ next }) => Console.op.log(`Count: ${next.count}`))
-            .do(({ next }) => State.put(next))
-            .return(({ next }) => next.count),
+            .let("next", (s, ctx) => ({ count: ctx!.s.count + 1 }))
+            .tap((next) => Console.op.log(`Count: ${next.count}`))
+            .tap((next) => State.put(next))
+            .then((next) => next.count)
+            .value(),
         present: (run: NormalizedRun) => ({
           status: "ok" as const,
           headline: `Counter incremented`,

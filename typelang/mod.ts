@@ -42,70 +42,120 @@ export function defineEffect<
 // Sequential builder --------------------------------------------------------
 
 type Ctx = Readonly<Record<string, unknown>>;
-type StepFn = (ctx: Record<string, unknown>) => Promise<Record<string, unknown>>;
+type StepResult = Readonly<{ ctx: Record<string, unknown>; last: unknown }>;
+type StepFn = (state: StepResult) => Promise<StepResult>;
 
-type SeqBuilder<C> = {
+type SeqBuilder<C, Last> = {
+  // Anonymous .let() - stores value as "last"
+  let<A, E>(f: (last: Last, ctx?: Readonly<C>) => Eff<A, E>): SeqBuilder<C, A>;
+  // Named .let() - stores in context AND as "last"
   let<K extends string, A, E>(
     key: K,
-    f: (ctx: Readonly<C>) => Eff<A, E>,
-  ): SeqBuilder<C & Readonly<Record<K, A>>>;
-  do<E>(f: (ctx: Readonly<C>) => Eff<unknown, E>): SeqBuilder<C>;
+    f: (last: Last, ctx?: Readonly<C>) => Eff<A, E>,
+  ): SeqBuilder<C & Readonly<Record<K, A>>, A>;
+  // Chain last value (like Promise.then)
+  then<A, E>(f: (last: Last) => Eff<A, E>): SeqBuilder<C, A>;
+  // Side effect with last value only
+  tap<E>(f: (last: Last) => Eff<void, E>): SeqBuilder<C, Last>;
+  // Side effect with last + context
+  do<E>(f: (last: Last, ctx: Readonly<C>) => Eff<void, E>): SeqBuilder<C, Last>;
+  // Conditional execution
   when<E>(
-    predicate: (ctx: Readonly<C>) => boolean,
-    thenBranch: (ctx: Readonly<C>) => Eff<unknown, E>,
-  ): SeqBuilder<C>;
-  return<A, E>(f: (ctx: Readonly<C>) => Eff<A, E>): Eff<A, E>;
+    predicate: (last: Last, ctx?: Readonly<C>) => boolean,
+    thenBranch: (last: Last, ctx?: Readonly<C>) => Eff<void, E>,
+  ): SeqBuilder<C, Last>;
+  // Return last value directly
+  value(): Eff<Last, unknown>;
+  // Return transformed value
+  return<A, E>(f: (last: Last, ctx?: Readonly<C>) => Eff<A, E>): Eff<A, E>;
 };
 
 const freeze = <T extends Record<string, unknown>>(value: T): T => Object.freeze({ ...value });
 
-const runSteps = async (steps: readonly StepFn[]): Promise<Record<string, unknown>> =>
+const runSteps = async (steps: readonly StepFn[]): Promise<StepResult> =>
   steps.reduce(
     (acc, step) => acc.then(step),
-    Promise.resolve(freeze({})),
+    Promise.resolve({ ctx: freeze({}), last: undefined as unknown }),
   );
 
-const buildSeq = <C>(steps: readonly StepFn[]): SeqBuilder<C> => ({
-  let<K extends string, A, E>(key: K, f: (ctx: Readonly<C>) => Eff<A, E>) {
-    const next: StepFn = async (ctx) => {
-      const current = ctx as Readonly<C>;
-      const value = await resolveEff(f(current));
-      return freeze({ ...current, [key]: value });
-    };
-    return buildSeq<C & Readonly<Record<K, A>>>([...steps, next]);
+const buildSeq = <C, Last>(steps: readonly StepFn[]): SeqBuilder<C, Last> => ({
+  let(...args: readonly unknown[]) {
+    // Detect anonymous vs named based on first argument type
+    if (typeof args[0] === "string") {
+      // Named: .let("key", fn)
+      const key = args[0] as string;
+      const f = args[1] as (last: Last, ctx?: Readonly<C>) => unknown;
+      const next: StepFn = async (state) => {
+        const value = await resolveEff(f(state.last as Last, state.ctx as Readonly<C>));
+        return { ctx: freeze({ ...state.ctx, [key]: value }), last: value };
+      };
+      return buildSeq([...steps, next]) as unknown as SeqBuilder<
+        C & Readonly<Record<string, unknown>>,
+        unknown
+      >;
+    } else {
+      // Anonymous: .let(fn)
+      const f = args[0] as (last: Last, ctx?: Readonly<C>) => unknown;
+      const next: StepFn = async (state) => {
+        const value = await resolveEff(f(state.last as Last, state.ctx as Readonly<C>));
+        return { ctx: state.ctx, last: value };
+      };
+      return buildSeq([...steps, next]) as unknown as SeqBuilder<C, unknown>;
+    }
   },
-  do<E>(f: (ctx: Readonly<C>) => Eff<unknown, E>) {
-    const next: StepFn = async (ctx) => {
-      await resolveEff(f(ctx as Readonly<C>));
-      return ctx;
+  then<A, E>(f: (last: Last) => Eff<A, E>) {
+    const next: StepFn = async (state) => {
+      const value = await resolveEff(f(state.last as Last));
+      return { ctx: state.ctx, last: value };
     };
-    return buildSeq<C>([...steps, next]);
+    return buildSeq<C, A>([...steps, next]);
+  },
+  tap<E>(f: (last: Last) => Eff<void, E>) {
+    const next: StepFn = async (state) => {
+      await resolveEff(f(state.last as Last));
+      return state;
+    };
+    return buildSeq<C, Last>([...steps, next]);
+  },
+  do<E>(f: (last: Last, ctx: Readonly<C>) => Eff<void, E>) {
+    const next: StepFn = async (state) => {
+      await resolveEff(f(state.last as Last, state.ctx as Readonly<C>));
+      return state;
+    };
+    return buildSeq<C, Last>([...steps, next]);
   },
   when<E>(
-    predicate: (ctx: Readonly<C>) => boolean,
-    thenBranch: (ctx: Readonly<C>) => Eff<unknown, E>,
+    predicate: (last: Last, ctx?: Readonly<C>) => boolean,
+    thenBranch: (last: Last, ctx?: Readonly<C>) => Eff<void, E>,
   ) {
-    const next: StepFn = async (ctx) => {
-      const current = ctx as Readonly<C>;
-      if (predicate(current)) {
-        await resolveEff(thenBranch(current));
+    const next: StepFn = async (state) => {
+      if (predicate(state.last as Last, state.ctx as Readonly<C>)) {
+        await resolveEff(thenBranch(state.last as Last, state.ctx as Readonly<C>));
       }
-      return ctx;
+      return state;
     };
-    return buildSeq<C>([...steps, next]);
+    return buildSeq<C, Last>([...steps, next]);
   },
-  return<A, E>(f: (ctx: Readonly<C>) => Eff<A, E>) {
+  value() {
     return resolveEff(
       (async () => {
-        const context = await runSteps(steps);
-        return await resolveEff(f(context as Readonly<C>));
+        const state = await runSteps(steps);
+        return state.last as Last;
+      })(),
+    ) as unknown as Eff<Last, unknown>;
+  },
+  return<A, E>(f: (last: Last, ctx?: Readonly<C>) => Eff<A, E>) {
+    return resolveEff(
+      (async () => {
+        const state = await runSteps(steps);
+        return await resolveEff(f(state.last as Last, state.ctx as Readonly<C>));
       })(),
     ) as unknown as Eff<A, E>;
   },
 });
 
-export function seq<C0 extends Ctx = {}>() {
-  return buildSeq<C0>([]);
+export function seq() {
+  return buildSeq<{}, void>([]);
 }
 
 // Parallel helpers ----------------------------------------------------------

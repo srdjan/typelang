@@ -16,8 +16,11 @@ Deno.test("seq.when executes branch when predicate is true", async () => {
   await stack(customHandler, handlers.Exception.tryCatch()).run(() =>
     seq()
       .let("value", () => 10)
-      .when(({ value }) => value > 5, ({ value }) => Console.op.log(`Value ${value} is large`))
-      .return(() => "done")
+      .when((last, ctx) => ctx!.value > 5, (last, ctx) =>
+        Console.op.log(`Value ${ctx!.value} is large`))
+      .return(() =>
+        "done"
+      )
   );
 
   assertEquals(logs, ["Value 10 is large"]);
@@ -37,8 +40,11 @@ Deno.test("seq.when skips branch when predicate is false", async () => {
   await stack(customHandler, handlers.Exception.tryCatch()).run(() =>
     seq()
       .let("value", () => 3)
-      .when(({ value }) => value > 5, ({ value }) => Console.op.log(`Value ${value} is large`))
-      .return(() => "done")
+      .when((last, ctx) => ctx!.value > 5, (last, ctx) =>
+        Console.op.log(`Value ${ctx!.value} is large`))
+      .return(() =>
+        "done"
+      )
   );
 
   assertEquals(logs, []);
@@ -56,9 +62,9 @@ Deno.test("seq.when preserves context", async () => {
     seq()
       .let("a", () => 1)
       .let("b", () => 2)
-      .when(({ a }) => a > 0, () => Console.op.log("positive"))
-      .let("c", ({ a, b }) => a + b)
-      .return(({ a, b, c }) => ({ a, b, c }))
+      .when((last, ctx) => ctx!.a > 0, () => Console.op.log("positive"))
+      .let("c", (last, ctx) => ctx!.a + ctx!.b)
+      .return((last, ctx) => ({ a: ctx!.a, b: ctx!.b, c: ctx!.c }))
   ) as unknown;
 
   const expected = { tag: "Ok", value: { a: 1, b: 2, c: 3 } };

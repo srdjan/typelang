@@ -136,17 +136,24 @@ const appendEvent = (
 const workflowProgram = () =>
   seq()
     .let("state", () => State.get<WorkflowState>())
-    .let("stage", ({ state }) => state.stage)
-    .let("next", ({ stage }) => nextStage(stage))
-    .let("event", ({ next }) => ({
+    .then((state) => state.stage)
+    .then((stage) => nextStage(stage))
+    .let("next", (next) => next)
+    .then((next) => ({
       tag: "StageChanged" as const,
       stage: next,
       note: stageNote(next),
     }))
-    .do(({ next }) => Console.op.log(`Stage → ${stageLabel(next)}`))
-    .let("history", ({ state, event }) => appendEvent(state.history, event))
-    .do(({ next, history }) => State.put<WorkflowState>({ stage: next, history }))
-    .return(({ next, history }) => ({ stage: next, history }));
+    .let("event", (event) => event)
+    .tap((event) => Console.op.log(`Stage → ${stageLabel(event.stage)}`))
+    .do((event, ctx) => {
+      const history = appendEvent(ctx!.state.history, event);
+      return State.put<WorkflowState>({ stage: event.stage, history });
+    })
+    .return((event, ctx) => {
+      const history = appendEvent(ctx!.state.history, event);
+      return { stage: event.stage, history };
+    });
 
 const presentWorkflow = (run: NormalizedRun): DemoRun =>
   match(run.outcome, {
@@ -221,31 +228,34 @@ type ParallelSnapshot = Readonly<{
 
 const parallelProgram = () =>
   seq()
-    .let("results", () =>
+    .let(() =>
       par.all({
         console: () => runTask(parallelDescriptors[0]),
         state: () => runTask(parallelDescriptors[1]),
         async: () => runTask(parallelDescriptors[2]),
-      }))
-    .let("tasks", ({ results }) =>
+      })
+    )
+    .then((results) =>
       pipe(parallelDescriptors, (descriptors) =>
-        descriptors.map((descriptor) =>
-          results[descriptor.id]
-        )))
-    .let("fastest", ({ tasks }) =>
-      pipe(
+        descriptors.map((descriptor) => results[descriptor.id]))
+    )
+    .then((tasks) => ({
+      tasks,
+      fastest: pipe(
         tasks,
         (ts) =>
           ts.reduce(
             (best, current) =>
               match(toBoolTag(current.delay < best.delay), {
-                True: () => current,
+                True: () =>
+                  current,
                 False: () => best,
               }),
             tasks[0],
           ),
-      ))
-    .return(({ tasks, fastest }) => ({ tasks, fastest }));
+      ),
+    }))
+    .value();
 
 const presentParallel = (run: NormalizedRun): DemoRun =>
   match(run.outcome, {
@@ -394,13 +404,13 @@ type ConfigSnapshot = Readonly<{
 const configProgram = () =>
   seq()
     .let("input", () => configInput)
-    .do(({ input }) => Console.op.log(`Validating ${input.label}`))
-    .let("feature", ({ input }) => ensureFlag(input.featureFlag))
-    .let("throttle", ({ input }) => ensureThrottle(input.throttle))
-    .return(({ feature, throttle, input }) => ({
-      feature,
-      throttle,
-      label: input.label,
+    .tap((input) => Console.op.log(`Validating ${input.label}`))
+    .let("feature", (input, ctx) => ensureFlag(ctx!.input.featureFlag))
+    .let("throttle", (input, ctx) => ensureThrottle(ctx!.input.throttle))
+    .return((throttle, ctx) => ({
+      feature: ctx!.feature,
+      throttle: ctx!.throttle,
+      label: ctx!.input.label,
     }));
 
 const modeLabel = (mode: FeatureMode): string =>
@@ -481,16 +491,17 @@ export const demos: readonly ShowcaseDemo[] = [
     code: `const workflow = () =>
   seq()
     .let("state", () => State.get<WorkflowState>())
-    .let("stage", ({ state }) => state.stage)
-    .let("next", ({ stage }) => nextStage(stage))
-    .do(({ next }) => Console.op.log(\`Stage → \${stageLabel(next)}\`))
-    .let("history", ({ state, next }) =>
-      [...state.history, makeEvent(next)]
-    )
-    .do(({ next, history }) =>
-      State.put<WorkflowState>({ stage: next, history })
-    )
-    .return(({ next, history }) => ({ stage: next, history }));`,
+    .then((state) => state.stage)
+    .then((stage) => nextStage(stage))
+    .let("next", (next) => next)
+    .then((next) => ({ stage: next, note: "stage advanced" }))
+    .let("event", (event) => event)
+    .tap((event) => Console.op.log(\`Stage → \${stageLabel(event.stage)}\`))
+    .do((event, ctx) => {
+      const history = [...ctx!.state.history, event];
+      return State.put({ stage: event.stage, history });
+    })
+    .return((event, ctx) => ({ stage: event.stage, history: ctx!.state.history }));`,
     state: { initial: initialWorkflow, label: "Workflow" },
     usesAsync: false,
     program: workflowProgram,
@@ -509,22 +520,26 @@ export const demos: readonly ShowcaseDemo[] = [
     effectHandlers: ["Console.capture()", "Exception.tryCatch()", "Async.default()"],
     code: `const program = () =>
   seq()
-    .let("results", () =>
+    .let(() =>
       par.all({
         console: () => runTask(consoleTask),
         state: () => runTask(stateTask),
         async: () => runTask(asyncTask),
       })
     )
-    .let("tasks", ({ results }) =>
+    .then((results) =>
       descriptors.map((descriptor) => results[descriptor.id])
     )
-    .let("fastest", ({ tasks }) =>
+    .then((tasks) =>
       tasks.reduce((best, current) =>
-        current.delay < best.delay ? current : best
+        match(toBoolTag(current.delay < best.delay), {
+          True: () => current,
+          False: () => best,
+        })
       )
     )
-    .return(({ tasks, fastest }) => ({ tasks, fastest }));`,
+    .let("fastest", (fastest) => fastest)
+    .return((fastest, ctx) => ({ tasks: descriptors.map(d => ctx![d.id]), fastest }));`,
     state: null,
     usesAsync: true,
     program: parallelProgram,
@@ -544,13 +559,13 @@ export const demos: readonly ShowcaseDemo[] = [
     code: `const config = () =>
   seq()
     .let("input", () => configInput)
-    .do(({ input }) => Console.op.log(\`Validating \${input.label}\`))
-    .let("feature", ({ input }) => ensureFlag(input.featureFlag))
-    .let("throttle", ({ input }) => ensureThrottle(input.throttle))
-    .return(({ feature, throttle, input }) => ({
-      feature,
-      throttle,
-      label: input.label,
+    .tap((input) => Console.op.log(\`Validating \${input.label}\`))
+    .let("feature", (input, ctx) => ensureFlag(ctx!.input.featureFlag))
+    .let("throttle", (input, ctx) => ensureThrottle(ctx!.input.throttle))
+    .return((throttle, ctx) => ({
+      feature: ctx!.feature,
+      throttle: ctx!.throttle,
+      label: ctx!.input.label,
     }));`,
     state: null,
     usesAsync: false,

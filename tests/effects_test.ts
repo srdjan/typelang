@@ -21,8 +21,8 @@ Deno.test("custom effects compose with built-ins", async () => {
     handlers.Exception.tryCatch(),
   ).run(() =>
     seq()
-      .let("msg", () => Custom.op.greet("World"))
-      .return(({ msg }) => msg)
+      .let(() => Custom.op.greet("World"))
+      .value()
   ) as unknown;
 
   assertEquals(result, { tag: "Ok", value: "Hello, World!" });
@@ -55,9 +55,10 @@ Deno.test("handlers can intercept and transform operations", async () => {
 Deno.test("state modifications are isolated per stack", async () => {
   const program = () =>
     seq()
-      .do(() => State.modify<{ count: number }>((s) => ({ count: s.count + 1 })))
-      .let("state", () => State.get<{ count: number }>())
-      .return(({ state }) => state.count);
+      .tap(() => State.modify<{ count: number }>((s) => ({ count: s.count + 1 })))
+      .let(() => State.get<{ count: number }>())
+      .then((state) => state.count)
+      .value();
 
   const result1 = await stack(
     handlers.State.with<{ count: number }>({ count: 0 }),
@@ -79,9 +80,9 @@ Deno.test("exception handler short-circuits on fail", async () => {
   ).run(() =>
     seq()
       .let("a", () => "first")
-      .do(() => Exception.op.fail({ reason: "error" }))
+      .tap(() => Exception.op.fail({ reason: "error" }))
       .let("b", () => "unreachable")
-      .return(({ a, b }) => `${a}-${b}`)
+      .return((b, ctx) => `${ctx!.a}-${b}`)
   ) as unknown;
 
   assertEquals(result, { tag: "Err", error: { reason: "error" } });
