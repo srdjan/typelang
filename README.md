@@ -10,6 +10,18 @@ deno task dev
 # open http://localhost:8080
 ```
 
+## Interactive showcase
+
+- Navigate to `/` to explore an HTMX-driven dashboard that renders typelang programs server-side.
+- Each card highlights a concrete capability: `seq()` orchestration with State, `par` concurrency
+  with Async, and typed Exception guards.
+- Results stream back as structured JSON captured by `Console.capture()` and `State.with()`—no
+  Promises or mutation in application code.
+- The hero panel demonstrates middleware composition by calling `/health` without reloading the
+  page.
+- Zero external dependencies: the showcase relies exclusively on Deno, typelang runtime, and static
+  CSS.
+
 ## Lint the subset rules
 
 ```bash
@@ -23,7 +35,7 @@ and `let`/`var`.
 ## Test
 
 ```bash
-# Run all tests (109 tests)
+# Run all tests (116 tests)
 deno task test
 
 # Run tests in watch mode (auto-rerun on file changes)
@@ -33,10 +45,11 @@ deno task test:watch
 deno task test:coverage
 ```
 
-**Test Coverage:** 109 tests covering:
+**Test Coverage:** 116 tests covering:
 
 - ✅ Effect runtime (handlers, combinators, seq, par)
 - ✅ HTTP server (routing, middleware, utilities)
+- ✅ Showcase programs (Console, State, Exception, Async demos)
 - ✅ Security (path traversal, input validation)
 - ✅ Functional subset linter
 
@@ -51,7 +64,7 @@ typelang-repo/
   app/             # external routes (the “input” to server)
   public/          # static assets (served at /static)
   scripts/         # subset linter (Deno-only)
-  tests/           # comprehensive test suite (109 tests)
+  tests/           # comprehensive test suite (116 tests)
   deno.jsonc       # tasks: dev, test, lint, fmt
 ```
 
@@ -60,7 +73,7 @@ typelang-repo/
 - External `Routes` as input
 - Path params (`/users/:id`)
 - Middleware: logger, CORS, error boundary, rate-limit, static, auth stub
-- HTMX-friendly sample page
+- Showcase root route renders HTMX-ready partials (`/showcase/:id`, `/showcase/:id/run`)
 - Tiny, dependency-free implementation
 
 ## Typelang (minimal surface used here)

@@ -4,7 +4,7 @@
 
 const SKIP_DIRS = new Set([".git", "node_modules", "dist", "build", "coverage", ".deno"]);
 const INCLUDE_PATTERNS = [/^\.\/app\//];
-const SKIP_FILES = new Set(["./typelang/runtime.ts", "./app/routes.ts"]);
+const SKIP_FILES = new Set(["./typelang/runtime.ts"]);
 
 const isIncluded = (path: string) =>
   INCLUDE_PATTERNS.some((p) => p.test(path)) && !SKIP_FILES.has(path);
@@ -161,16 +161,18 @@ export const scan = (path: string, source: string): Diagnostic[] => {
         if (prev === "=" || prev === "!" || prev === "<" || prev === ">") continue;
         const segmentStart = source.lastIndexOf("\n", i - 1) + 1;
         const before = source.slice(segmentStart, i).trimStart();
-        const isConstDecl = before.startsWith("const ") || before.startsWith("const[") ||
-          before.startsWith("const{") || before.startsWith("export const ") ||
-          before.startsWith("export const[") || before.startsWith("export const{");
-        if (isConstDecl) continue;
+        const normalized = before.replace(/\s+/g, " ");
+        const isConstDecl = /^(?:export\s+)?const\b/.test(normalized);
+        const isTypeAlias = /^(?:export\s+)?type\b/.test(normalized);
+        const inTemplateLiteral = before.includes("`");
+        if (isConstDecl || isTypeAlias || inTemplateLiteral) continue;
         pushDiagnostic("Assignment expressions are not allowed (no mutation)", i);
         continue;
       }
       if (ch === "?") {
         if (next === "?" || next === ".") continue;
         if (prev === "?") continue;
+        if (next === ":") continue;
         pushDiagnostic("`?:` conditional is not allowed; use `match()`", i);
         continue;
       }
@@ -179,17 +181,21 @@ export const scan = (path: string, source: string): Diagnostic[] => {
         let j = i + 1;
         while (j < source.length && isIdentifierPart(source[j])) j++;
         const word = source.slice(i, j);
+        const propertyAccess = source[i - 1] === ".";
         switch (word) {
           case "class":
+            if (source[j] === "=") break;
             pushDiagnostic("Classes are not allowed", i);
             break;
           case "this":
             pushDiagnostic("`this` is not allowed", i);
             break;
           case "if":
+            if (propertyAccess) break;
             pushDiagnostic("`if`/`else` are not allowed; use `match()`", i);
             break;
           case "else":
+            if (propertyAccess) break;
             pushDiagnostic("`if`/`else` are not allowed; use `match()`", i);
             break;
           case "new": {
@@ -199,12 +205,15 @@ export const scan = (path: string, source: string): Diagnostic[] => {
             break;
           }
           case "for":
+            if (propertyAccess) break;
             pushDiagnostic("`for` loops are not allowed", i);
             break;
           case "while":
+            if (propertyAccess) break;
             pushDiagnostic("`while` loops are not allowed", i);
             break;
           case "do":
+            if (propertyAccess) break;
             pushDiagnostic("`do..while` loops are not allowed", i);
             break;
           case "enum":
@@ -215,6 +224,7 @@ export const scan = (path: string, source: string): Diagnostic[] => {
             break;
           case "let":
           case "var":
+            if (propertyAccess) break;
             pushDiagnostic("`let`/`var` are not allowed; use `const`", i);
             break;
         }

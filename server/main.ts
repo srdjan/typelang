@@ -31,6 +31,7 @@ export const createServer = (routes: Routes, opts: ServerOptions = {}) => {
 
   return Deno.serve({
     port: 8080,
+    hostname: "127.0.0.1",
     onListen: ({ port, hostname }) => console.log(`listening on http://${hostname}:${port}`),
   }, (req: Request) => {
     const url = new URL(req.url);

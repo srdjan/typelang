@@ -28,6 +28,10 @@ _A functional TypeScript subset with algebraic effects_
 algebraic effects. It is **100% valid TypeScript**—no custom syntax, no decorators—and ships a tiny
 runtime to interpret effects via **handlers**.
 
+> 💡 **Interactive tour:** run `deno task dev` and open `http://localhost:8080` to explore the new
+> typelang showcase. Each card executes a real algebraic-effect program (Console, State, Exception,
+> Async) using the Light FP subset described in this guide.
+
 **DX goals**
 
 - **Zero new syntax:** Everything compiles with `tsc`/Deno.
