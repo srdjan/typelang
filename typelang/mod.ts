@@ -46,9 +46,12 @@ type StepResult = Readonly<{ ctx: Record<string, unknown>; last: unknown }>;
 type StepFn = (state: StepResult) => Promise<StepResult>;
 
 type SeqBuilder<C, Last> = {
-  // Anonymous .let() - stores value as "last"
-  let<A, E>(f: (last: Last, ctx?: Readonly<C>) => Eff<A, E>): SeqBuilder<C, A>;
-  // Named .let() - stores in context AND as "last"
+  // Anonymous .let() - stores value in context under an auto-generated key (v1, v2, ...),
+  // and also sets it as the new "last" value
+  let<A, E>(
+    f: (last: Last, ctx?: Readonly<C>) => Eff<A, E>,
+  ): SeqBuilder<C & Readonly<Record<string, A>>, A>;
+  // Named .let() (kept for compatibility) - stores in context under provided key AND as "last"
   let<K extends string, A, E>(
     key: K,
     f: (last: Last, ctx?: Readonly<C>) => Eff<A, E>,
@@ -94,13 +97,23 @@ const buildSeq = <C, Last>(steps: readonly StepFn[]): SeqBuilder<C, Last> => ({
         unknown
       >;
     } else {
-      // Anonymous: .let(fn)
+      // Anonymous: .let(fn) with auto-generated context key (v1, v2, ...)
       const f = args[0] as (last: Last, ctx?: Readonly<C>) => unknown;
       const next: StepFn = async (state) => {
         const value = await resolveEff(f(state.last as Last, state.ctx as Readonly<C>));
-        return { ctx: state.ctx, last: value };
+        // Generate next available key v1, v2, ... that does not collide with existing keys
+        let index = Object.keys(state.ctx).length + 1;
+        let key = `v${index}`;
+        while (Object.prototype.hasOwnProperty.call(state.ctx, key)) {
+          index++;
+          key = `v${index}`;
+        }
+        return { ctx: freeze({ ...state.ctx, [key]: value }), last: value };
       };
-      return buildSeq([...steps, next]) as unknown as SeqBuilder<C, unknown>;
+      return buildSeq([...steps, next]) as unknown as SeqBuilder<
+        C & Readonly<Record<string, unknown>>,
+        unknown
+      >;
     }
   },
   then<A, E>(f: (last: Last) => Eff<A, E>) {

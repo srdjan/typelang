@@ -65,9 +65,8 @@ type App =
 
 const tick = () =>
   seq()
-    .let("s", () => State.get<{ n: number }>())
+    .let(() => State.get<{ n: number }>()) // ctx.v1
     .then((s) => ({ n: s.n + 1 }))
-    .let("next", (next) => next)
     .tap((next) => State.put(next))
     .tap((next) => Console.log(`n=${next.n}`))
     .then((next) => next.n)
@@ -186,21 +185,26 @@ const addTodo = (
 ): Eff<string, Combine<ReturnType<typeof State.spec<AppState>>, typeof Exception.spec>> =>
   seq()
     .tap(() => guard(text.trim() !== "", () => Exception.op.fail({ tag: "InvalidInput" })))
-    .let("s", () => State.get<AppState>())
+    .let(() => State.get<AppState>()) // ctx.v1 (previous state)
     .then((s) => `todo-${s.nextId}`)
-    .let("id", (id) => id)
-    .then((id) => ({ id, text, completed: false }))
-    .let("todo", (todo) => todo)
+    .let((id) => id) // ctx.v2 (id)
+    .then((id) => ({ id, text, completed: false } as Todo))
     .do((todo, ctx) =>
-      State.put<AppState>({ nextId: ctx!.s.nextId + 1, todos: [...ctx!.s.todos, todo] })
+      State.put<AppState>({
+        nextId: (ctx!["v1"] as AppState).nextId + 1,
+        todos: [
+          ...(ctx!["v1"] as AppState).todos,
+          todo,
+        ],
+      })
     )
-    .return((todo, ctx) => ctx!.id);
+    .tap((_, ctx) => Console.log(`added ${(ctx!["v2"] as string)}`))
+    .return((_, ctx) => ctx!["v2"] as string);
 ```
 
 **Primitives**
 
-- `.let(key, effOrPure)` binds a name to context (when key provided)
-- `.let(effOrPure)` anonymous binding, stores result as "last" value
+- `.let(effOrPure)` auto-named binding (stores in context as `vN` and becomes last value)
 - `.then(f)` chains transformation on last value (like Promise.then)
 - `.tap(f)` performs side effect with last value, preserves last
 - `.do(f)` performs action with (last, ctx), preserves last
@@ -502,9 +506,8 @@ console.log({ result, logs, state });
 
 - `type Eff<A,E>`; `Pure<A>`; `Combine<E1,E2>`
 - `defineEffect<Name, Spec>(name)`
-- `seq().let(key?, f).then(f).tap(f).do(f).value() / .return(f)`
-  - `.let(key, f)` - named binding (adds to context)
-  - `.let(f)` - anonymous binding (becomes last value)
+- `seq().let(f).then(f).tap(f).do(f).value() / .return(f)`
+  - `.let(f)` - auto-named binding (adds to context as `vN` and becomes last value)
   - `.then(f)` - chain transformation on last value
   - `.tap(f)` - side effect with last value
   - `.do(f)` - action with (last, ctx)

@@ -210,18 +210,18 @@ Pure functional code needs ways to sequence operations and express concurrency w
 loops. **typelang** provides two abstractions: `seq()` for sequential composition and `par` for
 parallel execution.
 
-### Sequential Composition with Named Bindings
+### Sequential Composition with Auto-Named Bindings
 
 The `seq()` builder creates pipelines where each step can reference previous results through a typed
 context:
 
 ```typescript
-// Named bindings create a typed context
+// Auto-named bindings create a predictable context: v1, v2, ...
 seq()
-  .let("user", () => fetchUser(id))
-  .let("posts", ({ user }) => fetchPosts(user.id))
-  .do(({ posts }) => Console.op.log(`Found ${posts.length} posts`))
-  .return(({ user, posts }) => ({ user, posts }));
+  .let(() => fetchUser(id)) // ctx.v1
+  .let((user) => fetchPosts(user.id)) // ctx.v2
+  .do((_, ctx) => Console.op.log(`Found ${(ctx!["v2"] as any).length} posts`))
+  .return((_, ctx) => ({ user: ctx!["v1"], posts: ctx!["v2"] }));
 
 // Chain transformations with .then() (like Promise.then)
 seq()
@@ -230,23 +230,22 @@ seq()
   .tap((email) => Console.op.log(`Email: ${email}`))
   .value();
 
-// Anonymous .let() for intermediate values
+// Anonymous .let() also stores into context with auto keys
 seq()
-  .let(() => Http.op.get("/config"))
-  .let((config) => Http.op.get(config.endpoint))
+  .let(() => Http.op.get("/config")) // ctx.v1
+  .let((config) => Http.op.get(config.endpoint)) // ctx.v2
   .then((response) => response.json())
   .value();
 ```
 
-Each `.let(key, fn)` adds a named binding to the context. The function receives both the last value
-and the accumulated context, allowing access to all previous bindings. Anonymous `.let(fn)` updates
-only the last value without storing in context—useful for transformations you don't need to
-reference later. TypeScript infers the context type automatically—no manual annotations needed.
+Each `.let(fn)` adds a binding to the context under an auto-generated key (`v1`, `v2`, ...). The
+function receives both the last value and the accumulated context, allowing access to all previous
+bindings. This keeps pipelines concise without manual names while still enabling contextual access.
+TypeScript widens the context type to `Record<string, A>` for auto-named steps.
 
 Key seq() methods:
 
-- `.let(key, f)` - named binding (stored in context and becomes last value)
-- `.let(f)` - anonymous binding (becomes last value, not stored in context)
+- `.let(f)` - auto-named binding (stored in context as `vN` and becomes last value)
 - `.then(f)` - chain transformation on last value (like Promise.then)
 - `.tap(f)` - side effect with last value only
 - `.do(f)` - side effect with last value and context
@@ -258,12 +257,12 @@ The `.when()` method enables conditional logic within the subset's constraints:
 
 ```typescript
 seq()
-  .let("user", () => fetchUser(id))
+  .let(() => fetchUser(id))
   .when(
-    ({ user }) => user.premium,
-    ({ user }) => Console.op.log(`Premium user: ${user.name}`),
+    (_, ctx) => (ctx!["v1"] as any).premium,
+    (_, ctx) => Console.op.log(`Premium user: ${(ctx!["v1"] as any).name}`),
   )
-  .return(({ user }) => user);
+  .return((_, ctx) => ctx!["v1"] as any);
 ```
 
 This style is monadic—operations chain while maintaining immutability. The context is frozen after
