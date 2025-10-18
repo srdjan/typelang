@@ -163,9 +163,9 @@ const httpHandler: Handler = {
 const buildUserProfile = (userId: string) =>
   seq()
     .let("user", () => fetchUser(userId))
-    .let("posts", ({ user }) => Http.op.get(`/users/${user.id}/posts`))
-    .do(({ user, posts }) => Console.op.log(`${user.name} has ${posts.length} posts`))
-    .return(({ user, posts }) => ({ user, posts }));
+    .let("posts", (user) => Http.op.get(`/users/${user.id}/posts`))
+    .do((posts, ctx) => Console.op.log(`${ctx!.user.name} has ${posts.length} posts`))
+    .return((posts, ctx) => ({ user: ctx!.user, posts }));
 
 // Run program with handler stack
 const result = await stack(httpHandler, handlers.Console.live()).run(
@@ -197,8 +197,8 @@ const result = await stack(
   handlers.Exception.tryCatch(),
 ).run(() =>
   seq()
-    .tap(() => State.op.modify<{ count: number }>((s) => ({ count: s.count + 1 })))
-    .let(() => State.op.get<{ count: number }>())
+    .tap(() => State.modify<{ count: number }>((s) => ({ count: s.count + 1 })))
+    .let(() => State.get<{ count: number }>())
     .do((state) => Console.op.log(`Count: ${state.count}`))
     .value()
 );
