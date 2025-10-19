@@ -118,9 +118,9 @@ const result = await stack(handler).run(() => program);
 
 ```typescript
 seq()
-  .let(() => fetchUser(id))       // ctx.v1
+  .let(() => fetchUser(id)) // ctx.v1
   .then((user) => fetchPosts(user.id))
-  .let((posts) => posts)           // ctx.v2
+  .let((posts) => posts) // ctx.v2
   .tap((posts) => Console.log(`Found ${posts.length} posts`))
   .return((posts, ctx) => ({ user: ctx!["v1"], posts }));
 ```
