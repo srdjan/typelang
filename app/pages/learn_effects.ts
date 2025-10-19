@@ -59,11 +59,18 @@ const processUser = (id: string) =>
     )
     .return((result) => result);
 
-// Type signature reveals all effects:
-// Eff<User, Console | Exception | Http>`,
+// Type signature reveals all effects using record-based capabilities
+type ProcessUserCaps = Readonly<{
+  console: typeof Console.spec;
+  exception: typeof Exception.spec;
+  http: typeof Http.spec;
+}>;
+
+// Explicit signature: Eff<User, ProcessUserCaps>`,
     keyPoints: [
-      "Effects are tracked in the type signature as Eff<A, E>",
-      "A is the return value, E is the union of effect capabilities",
+      "Effects are tracked in the type signature as Eff<A, Caps>",
+      "A is the return value, Caps are the required capabilities (use record syntax)",
+      "Record-based capabilities: { console: Console; http: Http } are self-documenting",
       "Operations like Console.op.log() return Eff, not void",
       "Handlers interpret effects at runtime—swap handlers for different contexts",
       "Your code stays pure; side effects happen in handlers",
@@ -185,13 +192,25 @@ const complexProgram = () =>
       "par() runs effects concurrently—great for independent operations.",
       "The runtime automatically manages the handler stack for all effects.",
     ],
-    codeExample: `// Multi-effect program
+    codeExample: `// Multi-effect program demonstrating record-based capabilities
+import { Eff, seq, par } from "../typelang/mod.ts";
+import { Console, State, Exception, Async } from "../typelang/effects.ts";
+
 type AppState = Readonly<{
   users: readonly User[];
   lastFetch: string;
 }>;
 
-const fetchAndCacheUsers = () =>
+// Multi-capability type alias: explicit, self-documenting dependencies
+type UserCacheCaps = Readonly<{
+  console: typeof Console.spec;
+  state: ReturnType<typeof State.spec<AppState>>;
+  exception: typeof Exception.spec;
+  async: typeof Async.spec;
+}>;
+
+// Explicit type signature shows all required capabilities at a glance
+const fetchAndCacheUsers = (): Eff<readonly User[], UserCacheCaps> =>
   seq()
     // Console effect
     .do(() => Console.op.log("Fetching users..."))
@@ -226,10 +245,14 @@ const fetchAndCacheUsers = () =>
 
     .return((allUsers) => allUsers);
 
-// Type signature shows all effects:
-// Eff<User[], Console | State | Exception | Async>`,
+// Benefits of record-based capabilities:
+// ✅ Order-independent ({ console, state } = { state, console })
+// ✅ Self-documenting (see dependencies without looking up types)
+// ✅ No type explosion (no need for ConsoleAndState, ConsoleStateAndAsync, etc.)
+// ✅ Compiler-enforced (missing caps = type error)`,
     keyPoints: [
-      "Effect types form a union: Eff<A, E1 | E2 | E3>",
+      "Record-based capabilities: Eff<A, { console: Console; state: State }>",
+      "Order-independent, self-documenting—no need to look up composite types",
       "seq() allows any effect in any step",
       "par() runs effects concurrently when possible",
       "Handlers resolve effects in order—last registered wins",

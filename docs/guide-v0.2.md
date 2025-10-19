@@ -58,12 +58,14 @@ runtime to interpret effects via **handlers**.
 import { Console, defineEffect, Exception, match, par, pipe, seq, State } from "./typelang/mod.ts";
 
 // Program: increments state, logs, and returns next
-type App =
-  & ReturnType<typeof State.spec<{ n: number }>>
-  & typeof Console.spec
-  & typeof Exception.spec;
+// Record-based capabilities make dependencies explicit
+type AppCaps = {
+  state: ReturnType<typeof State.spec<{ n: number }>>;
+  console: typeof Console.spec;
+  exception: typeof Exception.spec;
+};
 
-const tick = () =>
+const tick = (): Eff<number, AppCaps> =>
   seq()
     .let(() => State.get<{ n: number }>()) // ctx.v1
     .then((s) => ({ n: s.n + 1 }))
@@ -73,7 +75,7 @@ const tick = () =>
     .value();
 
 // Parallel: run two ticks concurrently
-const both = () =>
+const both = (): Eff<{ a: number; b: number }, AppCaps> =>
   par.all({
     a: () => tick(),
     b: () => tick(),
@@ -101,19 +103,36 @@ console.log(await runApp(both)); // see runApp in §9
 
 ## 4) Core Semantics & Types
 
-### 4.1 `Eff<A, E>` (phantom effect set)
+### 4.1 `Eff<A, Caps>` (phantom effect set with record-based capabilities)
 
 ```ts
-// The value A with a phantom effect requirement E (erased at runtime).
-export type Eff<A, E> = A & { readonly __eff?: (e: E) => E };
+// The value A with a phantom capability requirement Caps (erased at runtime).
+export type Eff<A, Caps> = A & { readonly __eff?: (e: Caps) => Caps };
 export type Pure<A> = Eff<A, {}>;
-export type With<E, A> = Eff<A, E>;
+export type With<Caps, A> = Eff<A, Caps>;
 export type Combine<E1, E2> = E1 & E2;
 ```
 
-- Use `Eff<Return, EffectSet>` in function signatures.
-- The compiler propagates E across combinators; runtime is effect-free unless you interpret it via
-  handlers.
+- Use `Eff<Return, { cap1: C1; cap2: C2 }>` in function signatures for explicit, self-documenting
+  dependencies.
+- The record-based approach makes capability requirements immediately visible without looking up
+  composite types.
+- The compiler propagates Caps across combinators; runtime is effect-free unless you interpret it
+  via handlers.
+
+**Example:**
+
+```ts
+// Single capability
+const fetchUser: Eff<User, { http: Http }> = ...
+
+// Multiple capabilities - order-independent, self-documenting
+const registerUser: Eff<Result<User, string>, {
+  http: Http;
+  db: Db;
+  logger: Logger;
+}> = ...
+```
 
 ### 4.2 Data
 
@@ -383,13 +402,27 @@ const { result, logs, state } = stack(
 
 ## 12) Best Practices
 
-- **Effect caps by module:** export a _capability type_ alias (e.g.,
-  `type AppCaps = ConsoleSpec & ExceptionSpec & ReturnType<typeof State.spec<AppState>>;`) and use
-  it in signatures.
+- **Effect caps by module:** export a _capability type_ alias using record syntax for clarity:
+  ```ts
+  type AppCaps = {
+    console: typeof Console.spec;
+    exception: typeof Exception.spec;
+    state: ReturnType<typeof State.spec<AppState>>;
+  };
+  ```
+  This makes dependencies immediately visible in function signatures without looking up composite
+  types.
+- **Record-based capabilities:** Use `Eff<T, { http: Http; db: Db }>` instead of intersections.
+  Benefits:
+  - Order-independent destructuring (named properties prevent mistakes)
+  - Self-documenting signatures (capabilities visible at a glance)
+  - No combinatorial type explosion (no need for `HttpAndDb`, `HttpDbAndLogger`, etc.)
+  - Type-safe capability threading (compiler ensures all required caps are provided)
 - **Immutability first:** update via structural copies; prefer `readonly`.
 - **Match exhaustively:** never leave a tag unhandled.
 - **Prefer `seq` for clarity, `par` for I/O fan-out.** Keep each task small and independent.
-- **Testing:** compose handlers to return rich diagnostics; avoid global singletons.
+- **Testing:** compose handlers to return rich diagnostics; swap capability implementations easily
+  for tests.
 - **Lints:** keep `deno task lint` in CI; treat subset violations as build-breaking.
 
 ---
@@ -428,8 +461,12 @@ export type TodoId = string;
 export type Todo = { readonly id: TodoId; readonly text: string; readonly completed: boolean };
 export type AppState = { readonly todos: readonly Todo[]; readonly nextId: number };
 
-// Effects set for app
-export type AppCaps = ReturnType<typeof State.spec<AppState>> & ConsoleSpec & ExceptionSpec;
+// Effects set for app - record-based for clarity
+export type AppCaps = {
+  state: ReturnType<typeof State.spec<AppState>>;
+  console: ConsoleSpec;
+  exception: ExceptionSpec;
+};
 
 // ops.ts
 export const addTodo = (text: string): Eff<TodoId, AppCaps> =>

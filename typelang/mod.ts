@@ -1,5 +1,16 @@
 // typelang/mod.ts
 // Public surface: types, effect constructors, sequential/parallel combinators, and helpers.
+//
+// BEST PRACTICE: Use record-based capability types for multi-effect functions:
+//
+//   ✅ Good: Eff<User, { http: Http; db: Db; logger: Logger }>
+//   ❌ Avoid: Eff<User, HttpCap & DbCap & LoggerCap>
+//
+// Benefits of record-based capabilities:
+// - Order-independent destructuring (named properties prevent mistakes)
+// - Self-documenting signatures (capabilities visible at a glance)
+// - No combinatorial type explosion (no need for composite types)
+// - Type-safe capability threading (compiler ensures all required caps are provided)
 
 import { Handler, handlers as builtInHandlers, resolveEff, stack } from "./runtime.ts";
 import { AwaitedReturn, Capability, Combine, Eff, Instr, Pure } from "./types.ts";
@@ -15,6 +26,24 @@ export type { Handler };
 
 // Effect constructor --------------------------------------------------------
 
+/**
+ * defineEffect<Name, Spec> - Define a new effect with typed operations.
+ *
+ * Returns { name, op, spec } where:
+ * - name: the effect name
+ * - op: proxy object with typed operations
+ * - spec: capability type for use in Eff signatures
+ *
+ * @example
+ * const Http = defineEffect<"Http", {
+ *   get: (url: string) => Response;
+ *   post: (url: string, body: unknown) => Response;
+ * }>("Http");
+ *
+ * // Use in function signatures with record-based capabilities:
+ * const fetchUser = (id: string): Eff<User, { http: typeof Http.spec }> =>
+ *   Http.op.get(`/users/${id}`);
+ */
 export function defineEffect<
   Name extends string,
   Spec extends { readonly [K in keyof Spec]: EffectFn },

@@ -3,7 +3,7 @@
 
 import { Async, Console, Exception, State } from "../typelang/effects.ts";
 import { handlers, match, par, pipe, seq, stack } from "../typelang/mod.ts";
-import type { Handler } from "../typelang/mod.ts";
+import type { Eff, Handler } from "../typelang/mod.ts";
 
 type BoolTag =
   | Readonly<{ tag: "True" }>
@@ -133,7 +133,18 @@ const appendEvent = (
   event: StageEvent,
 ): readonly StageEvent[] => pipe(history, (items) => [...items, event]);
 
-const workflowProgram = () =>
+// Multi-capability type alias: demonstrates record-based effect composition
+// Order-independent, self-documenting, no need for composite type definitions
+type WorkflowCaps = Readonly<{
+  console: typeof Console.spec;
+  state: ReturnType<typeof State.spec<WorkflowState>>;
+  exception: typeof Exception.spec;
+}>;
+
+const workflowProgram = (): Eff<
+  Readonly<{ stage: Stage; history: readonly StageEvent[] }>,
+  WorkflowCaps
+> =>
   seq()
     .let(() => State.get<WorkflowState>())
     .then((state) => state.stage)
@@ -212,6 +223,13 @@ const parallelDescriptors: readonly TaskDescriptor[] = [
   { id: "async", label: "Async orchestration", delay: 24, icon: "⚡" },
 ] as const;
 
+// Multi-capability type for async operations with logging
+// Type annotation demonstrates record-based pattern but is optional due to inference
+type ParallelTaskCaps = Readonly<{
+  console: typeof Console.spec;
+  async: typeof Async.spec;
+}>;
+
 const runTask = (descriptor: TaskDescriptor) =>
   seq()
     .do(() => Console.op.log(`[${descriptor.label}] scheduled`))
@@ -222,10 +240,19 @@ const runTask = (descriptor: TaskDescriptor) =>
       label: descriptor.label,
       delay: descriptor.delay,
     }));
+// Inferred type: Eff<TaskResult, ParallelTaskCaps>
 
 type ParallelSnapshot = Readonly<{
   tasks: readonly TaskResult[];
   fastest: TaskResult;
+}>;
+
+// Multi-capability type demonstrating parallel effect composition
+// Type annotation optional due to inference, shown here for documentation
+type ParallelProgramCaps = Readonly<{
+  console: typeof Console.spec;
+  async: typeof Async.spec;
+  exception: typeof Exception.spec;
 }>;
 
 const parallelProgram = () =>
@@ -357,7 +384,10 @@ type FeatureMode =
   | Readonly<{ tag: "StableMode" }>
   | Readonly<{ tag: "BetaMode" }>;
 
-const ensureFlag = (value: string | undefined): FeatureMode =>
+// Helper function with Exception capability for validation
+const ensureFlag = (
+  value: string | undefined,
+): Eff<FeatureMode, Readonly<{ exception: typeof Exception.spec }>> =>
   match(presence(value), {
     Missing: () => Exception.op.fail({ tag: "MissingFlag" }),
     Present: ({ value: raw }) =>
@@ -382,7 +412,9 @@ const identifyThrottle = (value: string): Throttle =>
     tag: "Burst",
   };
 
-const ensureThrottle = (value: string | undefined): Throttle =>
+const ensureThrottle = (
+  value: string | undefined,
+): Eff<Throttle, Readonly<{ exception: typeof Exception.spec }>> =>
   match(presence(value), {
     Missing: () => ({ tag: "Balanced" } as const),
     Present: ({ value: raw }) =>
@@ -403,7 +435,13 @@ type ConfigSnapshot = Readonly<{
   label: string;
 }>;
 
-const configProgram = () =>
+// Multi-capability type for config validation with logging and error handling
+type ConfigProgramCaps = Readonly<{
+  console: typeof Console.spec;
+  exception: typeof Exception.spec;
+}>;
+
+const configProgram = (): Eff<ConfigSnapshot, ConfigProgramCaps> =>
   seq()
     .let(() => configInput)
     .tap((input) => Console.op.log(`Validating ${input.label}`))
@@ -490,7 +528,15 @@ export const demos: readonly ShowcaseDemo[] = [
     ],
     features: ["seq()", "State", "Console", "match()", "pipe()"],
     effectHandlers: ["Console.capture()", "State.with()", "Exception.tryCatch()"],
-    code: `const workflow = () =>
+    code: `// Multi-capability type alias: record-based effect composition
+// Order-independent, self-documenting
+type WorkflowCaps = Readonly<{
+  console: typeof Console.spec;
+  state: ReturnType<typeof State.spec<WorkflowState>>;
+  exception: typeof Exception.spec;
+}>;
+
+const workflow = (): Eff<WorkflowSnapshot, WorkflowCaps> =>
   seq()
     .let(() => State.get<WorkflowState>()) // ctx.v1
     .then((state) => state.stage)
@@ -524,7 +570,15 @@ export const demos: readonly ShowcaseDemo[] = [
     ],
     features: ["par.all()", "par.race()", "Async", "Console"],
     effectHandlers: ["Console.capture()", "Exception.tryCatch()", "Async.default()"],
-    code: `const program = () =>
+    code: `// Multi-capability type: parallel effect composition
+// Combines async operations, logging, and error handling
+type ParallelProgramCaps = Readonly<{
+  console: typeof Console.spec;
+  async: typeof Async.spec;
+  exception: typeof Exception.spec;
+}>;
+
+const program = (): Eff<ParallelSnapshot, ParallelProgramCaps> =>
   seq()
     .let(() =>
       par.all({
@@ -564,7 +618,14 @@ export const demos: readonly ShowcaseDemo[] = [
     ],
     features: ["Exception", "match()", "seq()", "Console"],
     effectHandlers: ["Console.capture()", "Exception.tryCatch()"],
-    code: `const config = () =>
+    code: `// Multi-capability type: validation with logging and error handling
+// Demonstrates record-based capabilities for clean composition
+type ConfigProgramCaps = Readonly<{
+  console: typeof Console.spec;
+  exception: typeof Exception.spec;
+}>;
+
+const config = (): Eff<ConfigSnapshot, ConfigProgramCaps> =>
   seq()
     .let(() => configInput) // ctx.v1
     .tap((input) => Console.op.log(\`Validating \${input.label}\`))

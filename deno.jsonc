@@ -22,5 +22,8 @@
       ]
     }
   },
-  "fmt": { "useTabs": false, "lineWidth": 100, "indentWidth": 2, "semiColons": true }
+  "fmt": { "useTabs": false, "lineWidth": 100, "indentWidth": 2, "semiColons": true },
+  "imports": {
+    "@srdjan/bluesky-bot": "jsr:@srdjan/bluesky-bot@^1.4.0"
+  }
 }

@@ -78,8 +78,10 @@ typelang-repo/
 
 ## Typelang (minimal surface used here)
 
-- `Eff<A,E>` phantom effect type + `Combine` helper
+- `Eff<A, Caps>` phantom effect type with record-based capabilities
 - `defineEffect(name)` to declare typed ops and capability specs
+- Record-based capability syntax: `Eff<User, { http: Http; db: Db; logger: Logger }>` makes
+  dependencies explicit
 - `stack(...handlers).run()` interpreter with built-in Console / State / Exception / Async handlers
 - `seq()` and `par` helpers (iterator-free) for linear & parallel steps that respect `Eff`
 - `match()` and `pipe()` utilities for expression-oriented control flow

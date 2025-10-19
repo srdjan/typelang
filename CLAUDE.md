@@ -79,7 +79,9 @@ docs/               # Design specifications and guides
 
 #### 1. Algebraic Effects System (typelang/)
 
-The core abstraction is `Eff<A, E>` - a value of type `A` that may perform effects `E`:
+The core abstraction is `Eff<A, Caps>` - a value of type `A` that requires capabilities `Caps`.
+
+**Record-based capabilities** make dependencies explicit and self-documenting:
 
 ```typescript
 // Define an effect
@@ -87,8 +89,15 @@ const { op, spec } = defineEffect<"MyEffect", {
   doThing: (x: number) => string
 }>("MyEffect");
 
-// Use the effect
-const program: Eff<string, Capability<"MyEffect", ...>> = op.doThing(42);
+// Use the effect with record-based capability type
+const program: Eff<string, { myEffect: typeof spec }> = op.doThing(42);
+
+// Multi-capability example - order-independent, self-documenting
+const complexProgram: Eff<User, {
+  http: typeof Http.spec;
+  db: typeof Db.spec;
+  logger: typeof Console.spec;
+}> = ...
 
 // Handle the effect
 const handler: Handler = {
@@ -104,6 +113,14 @@ const handler: Handler = {
 // Run with handler stack
 const result = await stack(handler).run(() => program);
 ```
+
+**Benefits of record-based capabilities:**
+
+- Order-independent destructuring (named properties prevent parameter order mistakes)
+- Self-documenting signatures (capabilities visible at a glance)
+- No combinatorial type explosion (no need to define composite types like `HttpAndDb`,
+  `HttpDbAndLogger`)
+- Type-safe capability threading (compiler ensures all required caps are provided)
 
 **Built-in handlers** (in `handlers` object from `mod.ts`):
 
