@@ -118,8 +118,8 @@ const captured = await stack(handlers.Console.capture()).run(captureProgram);
 // State.with(initial) - manages state
 const stateProgram = () =>
   seq()
-    .let("s", () => State.get<{count: number}>())
-    .do(({s}) => State.put({count: s.count + 1}))
+    .let(() => State.get<{count: number}>())
+    .do((s) => State.put({count: s.count + 1}))
     .return(() => "incremented");
 
 await stack(handlers.State.with({count: 0})).run(stateProgram);
@@ -268,15 +268,15 @@ import { Console, State, Exception, Async } from "../typelang/effects.ts";
 const complexProgram = () =>
   seq()
     .do(() => Console.op.log("Starting..."))
-    .let("state", () => State.get<{count: number}>())
+    .let(() => State.get<{count: number}>())
     .do(() => Async.op.sleep(50))
     .when(
-      ({state}) => state.count < 0,
+      (state) => state.count < 0,
       () => Exception.op.fail({tag: "NegativeCount"}),
     )
-    .do(({state}) => Console.op.log(\`Count: \${state.count}\`))
-    .do(({state}) => State.put({count: state.count + 1}))
-    .return(({state}) => state.count + 1);
+    .do((state) => Console.op.log(\`Count: \${state.count}\`))
+    .do((state) => State.put({count: state.count + 1}))
+    .return((state) => state.count + 1);
 
 // Stack handlers in order
 const result = await stack(

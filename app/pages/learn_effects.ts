@@ -50,14 +50,14 @@ function processUser(id: string) {
 const processUser = (id: string) =>
   seq()
     .do(() => Console.op.log(\`Processing \${id}\`))
-    .let("user", () => fetchUser(id))
-    .let("result", ({user}) =>
+    .let(() => fetchUser(id))
+    .let((user) =>
       match(option(user), {
         None: () => Exception.op.fail({tag: "NotFound", id}),
         Some: ({value}) => value,
       })
     )
-    .return(({result}) => result);
+    .return((result) => result);
 
 // Type signature reveals all effects:
 // Eff<User, Console | Exception | Http>`,
@@ -134,10 +134,10 @@ const greet = (name: string) =>
 // State effect
 const increment = () =>
   seq()
-    .let("current", () => State.get<{count: number}>())
-    .let("next", ({current}) => ({count: current.count + 1}))
-    .do(({next}) => State.put(next))
-    .return(({next}) => next.count);
+    .let(() => State.get<{count: number}>())
+    .let((current) => ({count: current.count + 1}))
+    .do((next) => State.put(next))
+    .return((next) => next.count);
 
 // Exception effect
 const divide = (a: number, b: number) =>
@@ -158,12 +158,12 @@ const delay = (ms: number, message: string) =>
 // Combine multiple effects
 const complexProgram = () =>
   seq()
-    .let("state", () => State.get<{count: number}>())
-    .do(({state}) => Console.op.log(\`Count: \${state.count}\`))
+    .let(() => State.get<{count: number}>())
+    .do((state) => Console.op.log(\`Count: \${state.count}\`))
     .do(() => Async.op.sleep(100))
-    .let("next", ({state}) => ({count: state.count + 1}))
-    .do(({next}) => State.put(next))
-    .return(({next}) => next);`,
+    .let((_, ctx) => ({count: (ctx!["v1"] as any).count + 1}))
+    .do((next) => State.put(next))
+    .return((next) => next);`,
     keyPoints: [
       "Console: log(), warn(), error() for structured logging",
       "State: get(), put(), modify() for immutable state",
@@ -197,7 +197,7 @@ const fetchAndCacheUsers = () =>
     .do(() => Console.op.log("Fetching users..."))
 
     // Async effect (parallel fetch)
-    .let("users", () =>
+    .let(() =>
       par.all({
         active: () => fetchActiveUsers(),
         inactive: () => fetchInactiveUsers(),
@@ -205,8 +205,8 @@ const fetchAndCacheUsers = () =>
     )
 
     // State effect (update cache)
-    .let("allUsers", ({users}) => [...users.active, ...users.inactive])
-    .do(({allUsers}) =>
+    .let((users) => [...users.active, ...users.inactive])
+    .do((allUsers) =>
       State.put<AppState>({
         users: allUsers,
         lastFetch: new Date().toISOString(),
@@ -215,16 +215,16 @@ const fetchAndCacheUsers = () =>
 
     // Exception effect (validate)
     .when(
-      ({allUsers}) => allUsers.length === 0,
+      (allUsers) => allUsers.length === 0,
       () => Exception.op.fail({tag: "NoUsers"}),
     )
 
     // Console effect (success)
-    .do(({allUsers}) =>
+    .do((allUsers) =>
       Console.op.log(\`Cached \${allUsers.length} users\`)
     )
 
-    .return(({allUsers}) => allUsers);
+    .return((allUsers) => allUsers);
 
 // Type signature shows all effects:
 // Eff<User[], Console | State | Exception | Async>`,

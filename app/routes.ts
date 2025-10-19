@@ -425,8 +425,8 @@ export const routes: Routes = [
         usesAsync: false,
         program: () =>
           seq()
-            .let("s", () => State.get<{ count: number }>())
-            .let("next", (s, ctx) => ({ count: ctx!.s.count + 1 }))
+            .let(() => State.get<{ count: number }>())
+            .let((s) => ({ count: s.count + 1 }))
             .tap((next) => Console.op.log(`Count: ${next.count}`))
             .tap((next) => State.put(next))
             .then((next) => next.count)

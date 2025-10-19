@@ -275,12 +275,12 @@ const lightLabel = (light: Light): string =>
 
 const stateMachineProgram = () =>
   seq()
-    .let("current", () => State.get<Light>())
+    .let(() => State.get<Light>())
     .tap((current) => Console.op.log(`Current: ${lightLabel(current)}`))
     .then((current) => nextLight(current))
     .tap((next) => State.put(next))
     .tap((next) => Console.op.log(`Next: ${lightLabel(next)}`))
-    .return((next, ctx) => ({ previous: ctx!.current, current: next }));
+    .return((next, ctx) => ({ previous: ctx!["v1"] as Light, current: next }));
 
 const presentStateMachine = (run: NormalizedRun): DemoRun =>
   match(run.outcome, {
@@ -530,20 +530,14 @@ export const additionalDemos: readonly ShowcaseDemo[] = [
     ],
     features: ["State", "match()", "seq()", "Console"],
     effectHandlers: ["Console.capture()", "State.with()", "Exception.tryCatch()"],
-    code: `const nextLight = (current: Light): Light =>
-  match(current, {
-    Red: ({timer}) =>
-      match(toBoolTag(timer > 0), {
-        True: () => ({...current, timer: timer - 1}),
-        False: () => ({tag: "Green", timer: 5}),
-      }),
-    Yellow: () => ({tag: "Red", timer: 5}),
-    Green: ({timer}) =>
-      match(toBoolTag(timer > 0), {
-        True: () => ({...current, timer: timer - 1}),
-        False: () => ({tag: "Yellow"}),
-      }),
-  });`,
+    code: `const program = () =>
+  seq()
+    .let(() => State.get<Light>()) // ctx.v1
+    .tap((current) => Console.op.log(\`Current: \${lightLabel(current)}\`))
+    .then((current) => nextLight(current))
+    .tap((next) => State.put(next))
+    .tap((next) => Console.op.log(\`Next: \${lightLabel(next)}\`))
+    .return((next, ctx) => ({ previous: ctx!["v1"] as Light, current: next }));`,
     state: { initial: initialLight, label: "Traffic Light" },
     usesAsync: false,
     program: stateMachineProgram,

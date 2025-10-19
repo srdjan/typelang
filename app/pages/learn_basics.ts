@@ -41,26 +41,26 @@ const concepts: readonly Concept[] = [
     codeExample: `// Build a user profile sequentially
 const buildProfile = (userId: string) =>
   seq()
-    .let("user", () => fetchUser(userId))
-    .let("posts", ({user}) => fetchPosts(user.id))
-    .let("followers", ({user}) => fetchFollowers(user.id))
-    .do(({user}) => Console.op.log(\`Building profile for \${user.name}\`))
-    .return(({user, posts, followers}) => ({
-      user,
-      postCount: posts.length,
+    .let(() => fetchUser(userId))            // ctx.v1
+    .let((user) => fetchPosts(user.id))       // ctx.v2
+    .let((posts, ctx) => fetchFollowers((ctx!["v1"] as User).id)) // ctx.v3
+    .do((followers, ctx) => Console.op.log(\`Building profile for \${(ctx!["v1"] as User).name}\`))
+    .return((followers, ctx) => ({
+      user: ctx!["v1"] as User,
+      postCount: (ctx!["v2"] as Post[]).length,
       followerCount: followers.length,
     }));
 
-// TypeScript knows the context type at each step:
-// After .let("user", ...):   {user: User}
-// After .let("posts", ...):  {user: User, posts: Post[]}
-// After .let("followers", ...): {user: User, posts: Post[], followers: User[]}`,
+// Auto-named context keys track all values:
+// After first .let():  ctx.v1 = User
+// After second .let(): ctx.v2 = Post[]
+// After third .let():  ctx.v3 = User[]`,
     keyPoints: [
-      ".let(name, fn) binds the result of fn to name in the context",
-      ".do(fn) runs an effect without adding to context",
+      ".let(fn) binds the result to auto-named context key (v1, v2, ...)",
+      ".do(fn) runs an effect without storing a new binding",
       ".when(pred, fn) conditionally runs an effect",
-      ".return(fn) produces the final value",
-      "Context is typed automatically—no manual type annotations needed",
+      ".return(fn) produces the final value using last and ctx",
+      "Context grows with each .let(), accessible via ctx['v1'], ctx['v2'], etc.",
     ],
     tryItUrl: "/playground?example=seq-basic",
   },

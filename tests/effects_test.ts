@@ -79,10 +79,10 @@ Deno.test("exception handler short-circuits on fail", async () => {
     handlers.Exception.tryCatch(),
   ).run(() =>
     seq()
-      .let("a", () => "first")
+      .let(() => "first")
       .tap(() => Exception.op.fail({ reason: "error" }))
-      .let("b", () => "unreachable")
-      .return((b, ctx) => `${ctx!.a}-${b}`)
+      .let(() => "unreachable")
+      .return((b, ctx) => `${ctx!["v1"]}-${b}`)
   ) as unknown;
 
   assertEquals(result, { tag: "Err", error: { reason: "error" } });

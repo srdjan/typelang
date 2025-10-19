@@ -135,23 +135,25 @@ const appendEvent = (
 
 const workflowProgram = () =>
   seq()
-    .let("state", () => State.get<WorkflowState>())
+    .let(() => State.get<WorkflowState>())
     .then((state) => state.stage)
     .then((stage) => nextStage(stage))
-    .let("next", (next) => next)
+    .let((next) => next)
     .then((next) => ({
       tag: "StageChanged" as const,
       stage: next,
       note: stageNote(next),
     }))
-    .let("event", (event) => event)
+    .let((event) => event)
     .tap((event) => Console.op.log(`Stage → ${stageLabel(event.stage)}`))
     .do((event, ctx) => {
-      const history = appendEvent(ctx!.state.history, event);
+      const state = ctx!["v1"] as WorkflowState;
+      const history = appendEvent(state.history, event);
       return State.put<WorkflowState>({ stage: event.stage, history });
     })
     .return((event, ctx) => {
-      const history = appendEvent(ctx!.state.history, event);
+      const state = ctx!["v1"] as WorkflowState;
+      const history = appendEvent(state.history, event);
       return { stage: event.stage, history };
     });
 
@@ -403,14 +405,14 @@ type ConfigSnapshot = Readonly<{
 
 const configProgram = () =>
   seq()
-    .let("input", () => configInput)
+    .let(() => configInput)
     .tap((input) => Console.op.log(`Validating ${input.label}`))
-    .let("feature", (input, ctx) => ensureFlag(ctx!.input.featureFlag))
-    .let("throttle", (input, ctx) => ensureThrottle(ctx!.input.throttle))
+    .let((input) => ensureFlag(input.featureFlag))
+    .let((_, ctx) => ensureThrottle((ctx!["v1"] as ConfigInput).throttle))
     .return((throttle, ctx) => ({
-      feature: ctx!.feature,
-      throttle: ctx!.throttle,
-      label: ctx!.input.label,
+      feature: ctx!["v2"] as FeatureMode,
+      throttle,
+      label: (ctx!["v1"] as ConfigInput).label,
     }));
 
 const modeLabel = (mode: FeatureMode): string =>
@@ -490,18 +492,22 @@ export const demos: readonly ShowcaseDemo[] = [
     effectHandlers: ["Console.capture()", "State.with()", "Exception.tryCatch()"],
     code: `const workflow = () =>
   seq()
-    .let("state", () => State.get<WorkflowState>())
+    .let(() => State.get<WorkflowState>()) // ctx.v1
     .then((state) => state.stage)
     .then((stage) => nextStage(stage))
-    .let("next", (next) => next)
-    .then((next) => ({ stage: next, note: "stage advanced" }))
-    .let("event", (event) => event)
+    .let((next) => next) // ctx.v2
+    .then((next) => ({ stage: next, note: stageNote(next) }))
+    .let((event) => event) // ctx.v3
     .tap((event) => Console.op.log(\`Stage → \${stageLabel(event.stage)}\`))
     .do((event, ctx) => {
-      const history = [...ctx!.state.history, event];
+      const state = ctx!["v1"] as WorkflowState;
+      const history = appendEvent(state.history, event);
       return State.put({ stage: event.stage, history });
     })
-    .return((event, ctx) => ({ stage: event.stage, history: ctx!.state.history }));`,
+    .return((event, ctx) => {
+      const state = ctx!["v1"] as WorkflowState;
+      return { stage: event.stage, history: appendEvent(state.history, event) };
+    });`,
     state: { initial: initialWorkflow, label: "Workflow" },
     usesAsync: false,
     program: workflowProgram,
@@ -528,18 +534,20 @@ export const demos: readonly ShowcaseDemo[] = [
       })
     )
     .then((results) =>
-      descriptors.map((descriptor) => results[descriptor.id])
+      pipe(descriptors, (descriptors) =>
+        descriptors.map((descriptor) => results[descriptor.id]))
     )
-    .then((tasks) =>
-      tasks.reduce((best, current) =>
-        match(toBoolTag(current.delay < best.delay), {
-          True: () => current,
-          False: () => best,
-        })
-      )
-    )
-    .let("fastest", (fastest) => fastest)
-    .return((fastest, ctx) => ({ tasks: descriptors.map(d => ctx![d.id]), fastest }));`,
+    .then((tasks) => ({
+      tasks,
+      fastest: pipe(tasks, (ts) =>
+        ts.reduce((best, current) =>
+          match(toBoolTag(current.delay < best.delay), {
+            True: () => current,
+            False: () => best,
+          }), tasks[0])
+      ),
+    }))
+    .value();`,
     state: null,
     usesAsync: true,
     program: parallelProgram,
@@ -558,14 +566,14 @@ export const demos: readonly ShowcaseDemo[] = [
     effectHandlers: ["Console.capture()", "Exception.tryCatch()"],
     code: `const config = () =>
   seq()
-    .let("input", () => configInput)
+    .let(() => configInput) // ctx.v1
     .tap((input) => Console.op.log(\`Validating \${input.label}\`))
-    .let("feature", (input, ctx) => ensureFlag(ctx!.input.featureFlag))
-    .let("throttle", (input, ctx) => ensureThrottle(ctx!.input.throttle))
+    .let((input) => ensureFlag(input.featureFlag)) // ctx.v2
+    .let((_, ctx) => ensureThrottle((ctx!["v1"] as ConfigInput).throttle)) // ctx.v3
     .return((throttle, ctx) => ({
-      feature: ctx!.feature,
-      throttle: ctx!.throttle,
-      label: ctx!.input.label,
+      feature: ctx!["v2"] as FeatureMode,
+      throttle,
+      label: (ctx!["v1"] as ConfigInput).label,
     }));`,
     state: null,
     usesAsync: false,

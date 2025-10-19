@@ -60,11 +60,11 @@ function increment() {
       code: `// Pure transformation
 const increment = () =>
   seq()
-    .let("state", () => State.get<{count: number}>())
-    .let("next", ({state}) => ({count: state.count + 1}))
-    .do(({next}) => Console.op.log(\`\${next.count}\`))
-    .do(({next}) => State.put(next))
-    .return(({next}) => next.count);`,
+    .let(() => State.get<{count: number}>())
+    .let((state) => ({count: state.count + 1}))
+    .do((next) => Console.op.log(\`\${next.count}\`))
+    .do((next) => State.put(next))
+    .return((next) => next.count);`,
       benefits: [
         "All effects tracked in type signature",
         "Pure functions = easy testing",
@@ -147,19 +147,19 @@ async function loadData() {
       code: `// Effect-based async
 const loadData = () =>
   seq()
-    .let("user", () => fetchUser())
-    .let("parallel", ({user}) =>
+    .let(() => fetchUser())
+    .let((user) =>
       par.all({
         posts: () => fetchPosts(user.id),
         metrics: () => fetchMetrics(user.id),
       })
     )
-    .let("comments", ({parallel}) =>
+    .let((parallel) =>
       fetchComments(parallel.posts[0]?.id)
     )
-    .return(({user, parallel, comments}) => ({
-      user,
-      posts: parallel.posts,
+    .return((comments, ctx) => ({
+      user: ctx!["v1"],
+      posts: (ctx!["v2"] as any).posts,
       comments,
     }));`,
       benefits: [
@@ -304,11 +304,11 @@ const renderHeroDemo = (): string => {
   const heroCode = `// Counter with Console + State
 const tick = () =>
   seq()
-    .let("s", () => State.get<{count: number}>())
-    .let("next", ({s}) => ({count: s.count + 1}))
-    .do(({next}) => Console.op.log(\`Count: \${next.count}\`))
-    .do(({next}) => State.put(next))
-    .return(({next}) => next.count);`;
+    .let(() => State.get<{count: number}>())
+    .let((s) => ({count: s.count + 1}))
+    .do((next) => Console.op.log(\`Count: \${next.count}\`))
+    .do((next) => State.put(next))
+    .return((next) => next.count);`;
 
   return `<div class="hero-demo">
     <div class="hero-demo__code">

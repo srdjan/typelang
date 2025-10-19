@@ -48,11 +48,11 @@ function increment() {
       code: `// Pure transformation
 const increment = () =>
   seq()
-    .let("state", () => State.get<{count: number}>())
-    .let("next", ({state}) => ({count: state.count + 1}))
-    .do(({next}) => Console.op.log(\`\${next.count}\`))
-    .do(({next}) => State.put(next))
-    .return(({next}) => next.count);
+    .let(() => State.get<{count: number}>())
+    .let((state) => ({count: state.count + 1}))
+    .do((next) => Console.op.log(\`\${next.count}\`))
+    .do((next) => State.put(next))
+    .return((next) => next.count);
 
 // Type: Eff<number, State | Console>
 // Test: swap State handler for mock
@@ -157,19 +157,19 @@ async function loadData() {
       code: `// Effect-based async
 const loadData = () =>
   seq()
-    .let("user", () => fetchUser())
-    .let("parallel", ({user}) =>
+    .let(() => fetchUser())
+    .let((user) =>
       par.all({
         posts: () => fetchPosts(user.id),
         metrics: () => fetchMetrics(user.id),
       })
     )
-    .let("comments", ({parallel}) =>
+    .let((parallel) =>
       fetchComments(parallel.posts[0]?.id)
     )
-    .return(({user, parallel, comments}) => ({
-      user,
-      posts: parallel.posts,
+    .return((comments, ctx) => ({
+      user: ctx!["v1"],
+      posts: (ctx!["v2"] as any).posts,
       comments,
     }));
 
@@ -221,7 +221,7 @@ type ParseError =
 
 const parseJSON = (input: string) =>
   seq()
-    .let("parsed", () =>
+    .let(() =>
       match(tryParse(input), {
         Ok: ({value}) => value,
         Err: ({error}) =>
@@ -232,13 +232,13 @@ const parseJSON = (input: string) =>
       })
     )
     .when(
-      ({parsed}) => !parsed.id,
+      (parsed) => !parsed.id,
       () => Exception.op.fail({
         tag: "MissingField",
         field: "id"
       })
     )
-    .return(({parsed}) => parsed as User);
+    .return((parsed) => parsed as User);
 
 // Use with Exception.tryCatch() handler
 // Returns: Result<User, ParseError>`,
@@ -289,9 +289,9 @@ expect(consoleLog).toHaveBeenCalled();`,
       code: `// Handler swapping
 const getUser = (id: string) =>
   seq()
-    .let("user", () => Database.op.query("SELECT * FROM users"))
-    .do(({user}) => Console.op.log(\`Found \${user.name}\`))
-    .return(({user}) => user);
+    .let(() => Database.op.query("SELECT * FROM users"))
+    .do((user) => Console.op.log(\`Found \${user.name}\`))
+    .return((user) => user);
 
 // Production
 await stack(
@@ -374,25 +374,25 @@ const calculateTotal = (amount: number, taxRate: number) =>
 const processOrder = (orderId: string, taxRate: number) =>
   seq()
     .do(() => Console.op.log(\`Processing \${orderId}\`))
-    .let("order", () => Database.op.findOrder(orderId))
-    .let("validated", ({order}) =>
+    .let(() => Database.op.findOrder(orderId))
+    .let((order) =>
       match(option(order), {
         None: () => Exception.op.fail({tag: "NotFound"}),
         Some: ({value}) => value,
       })
     )
-    .let("total", ({validated}) =>
+    .let((validated) =>
       calculateTotal(validated.amount, taxRate)
     )
-    .let("updated", ({validated, total}) => ({
-      ...validated,
+    .let((total, ctx) => ({
+      ...(ctx!["v2"] as any),
       total,
     }))
-    .do(({updated}) => Database.op.updateOrder(updated))
-    .do(({updated}) =>
+    .do((updated) => Database.op.updateOrder(updated))
+    .do((updated) =>
       Mailer.op.send(updated.email, "Order processed")
     )
-    .return(({updated}) => updated);
+    .return((updated) => updated);
 
 // Type: Eff<Order, Console | Database | Exception | Mailer>`,
       benefits: [
