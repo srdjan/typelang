@@ -63,10 +63,8 @@ const presentHello = (run: NormalizedRun): DemoRun =>
         status: "ok",
         headline: result.message,
         detail: [
-          "Console.op.log() writes to the Console effect",
-          "seq().do() executes effects without binding values",
-          "seq().let() binds values for later steps",
-          "seq().return() produces the final result",
+          "`Console.op.log()` pushes every message through the handler stack.",
+          "`seq()` separates effectful `.do()` steps from value bindings.",
         ],
         artifacts: [
           { label: "Count", value: String(result.count) },
@@ -75,10 +73,9 @@ const presentHello = (run: NormalizedRun): DemoRun =>
         console: run.console,
         state: run.state,
         timeline: [
-          { label: "Start", message: "Program initialized" },
-          { label: "Compute", message: "Set count to 42" },
-          { label: "Log", message: "Logged the answer" },
-          { label: "Complete", message: "Returned result" },
+          { label: "Start", message: "Captured initial Console log" },
+          { label: "Compute", message: "Bound count to 42 with seq().let()" },
+          { label: "Complete", message: "Returned data and flushed Console logs" },
         ],
         elapsedMs: run.elapsedMs,
       };
@@ -137,10 +134,8 @@ const presentPipe = (run: NormalizedRun): DemoRun =>
       status: "ok",
       headline: `Result: ${value}`,
       detail: [
-        "pipe() chains transformations left-to-right",
-        "Each function receives the output of the previous",
-        "Type-safe: compiler checks each step",
-        "Reads naturally top-to-bottom",
+        "`pipe()` keeps transformations readable and type-checked.",
+        "Console handler wraps the pipeline for lightweight observability.",
       ],
       artifacts: [
         { label: "Active Users", value: String(value) },
@@ -153,9 +148,8 @@ const presentPipe = (run: NormalizedRun): DemoRun =>
       state: run.state,
       timeline: [
         { label: "Filter", message: "Filtered active users" },
-        { label: "Extract", message: "Extracted names" },
-        { label: "Transform", message: "Converted to uppercase" },
-        { label: "Join", message: "Joined with commas" },
+        { label: "Transform", message: "Mapped names and converted to uppercase" },
+        { label: "Emit", message: "Joined names into the final string" },
       ],
       elapsedMs: run.elapsedMs,
     }),
@@ -212,10 +206,8 @@ const presentMatch = (run: NormalizedRun): DemoRun =>
         status: "ok",
         headline: `Processed ${messages.length} statuses`,
         detail: [
-          "match() provides exhaustive pattern matching",
-          "Compiler ensures all cases are handled",
-          "Destructure fields in each case",
-          "Works with discriminated unions (tag property)",
+          "`match()` exhaustively handles each variant of the union.",
+          "Field destructuring keeps success and error messaging declarative.",
         ],
         artifacts: [
           { label: "Messages", value: messages.join("\n") },
@@ -290,10 +282,8 @@ const presentStateMachine = (run: NormalizedRun): DemoRun =>
         status: "ok",
         headline: `Transitioned: ${lightLabel(result.previous)} → ${lightLabel(result.current)}`,
         detail: [
-          "State machines modeled with discriminated unions",
-          "Transitions enforced by pattern matching",
-          "Impossible states are type errors",
-          "State effect tracks current value",
+          "Discriminated unions model the traffic light without mutable state.",
+          "`State` + `match()` enforce legal transitions at compile time.",
         ],
         artifacts: [
           { label: "Previous", value: lightLabel(result.previous) },
@@ -354,10 +344,8 @@ const presentAsyncMap = (run: NormalizedRun): DemoRun =>
         status: "ok",
         headline: `Completed ${results.length} tasks in parallel`,
         detail: [
-          "par.map() runs tasks concurrently",
-          "Results maintain input order",
-          "Async effect handles sleep without Promises",
-          "All tasks complete before proceeding",
+          "`par.map()` runs async work concurrently while preserving input order.",
+          "Async handler encapsulates sleeps—no manual Promise wiring required.",
         ],
         artifacts: [
           { label: "Tasks", value: tasks.map((t) => t.name).join(", ") },
@@ -417,10 +405,8 @@ const presentRace = (run: NormalizedRun): DemoRun =>
         status: "ok",
         headline: `${winner.name} wins!`,
         detail: [
-          "par.race() returns the first completed task",
-          "Other tasks are cancelled",
-          "Fastest response wins",
-          "Great for timeout patterns",
+          "`par.race()` resolves as soon as the first branch succeeds.",
+          "Use for timeouts and fallbacks without manual cancellation plumbing.",
         ],
         artifacts: [
           { label: "Winner", value: winner.name },
@@ -455,9 +441,8 @@ export const additionalDemos: readonly ShowcaseDemo[] = [
     title: "Hello Effects",
     tagline: "Minimal Console + seq() demonstration",
     summary: [
-      "Introduces the Console effect with simple logging.",
-      "Shows seq() for linear computation flow.",
-      "Demonstrates .do() for effects and .let() for bindings.",
+      "Console handler captures every log emitted from a tiny `seq()` pipeline.",
+      "`seq()` separates `.do()` side effects from value-producing `.let()` steps.",
     ],
     features: ["seq()", "Console", ".do()", ".let()", ".return()"],
     effectHandlers: ["Console.capture()", "Exception.tryCatch()"],
@@ -478,9 +463,8 @@ export const additionalDemos: readonly ShowcaseDemo[] = [
     title: "Pipe Dreams",
     tagline: "Function composition with pipe()",
     summary: [
-      "Chains transformations in readable left-to-right order.",
-      "Each step receives the output of the previous step.",
-      "Type-safe composition checked by the compiler.",
+      "`pipe()` composes transforms in readable left-to-right order.",
+      "Type inference keeps each function aligned without manual annotations.",
     ],
     features: ["pipe()", "seq()", "Console"],
     effectHandlers: ["Console.capture()", "Exception.tryCatch()"],
@@ -502,9 +486,8 @@ export const additionalDemos: readonly ShowcaseDemo[] = [
     title: "Match Made",
     tagline: "Exhaustive pattern matching on unions",
     summary: [
-      "Demonstrates match() with discriminated unions.",
-      "Compiler enforces exhaustive case handling.",
-      "Destructures variant fields in each case.",
+      "`match()` exhaustively covers a discriminated union of statuses.",
+      "Inline destructuring keeps success and error copies declarative.",
     ],
     features: ["match()", "pipe()", "Console"],
     effectHandlers: ["Console.capture()", "Exception.tryCatch()"],
@@ -524,9 +507,8 @@ export const additionalDemos: readonly ShowcaseDemo[] = [
     title: "Traffic Light State Machine",
     tagline: "State transitions with match() guards",
     summary: [
-      "Models a traffic light as a state machine.",
-      "Uses match() to enforce valid transitions.",
-      "State effect tracks the current light.",
+      "State effect tracks a traffic light without mutating shared data.",
+      "`match()` validates each transition before the state handler commits it.",
     ],
     features: ["State", "match()", "seq()", "Console"],
     effectHandlers: ["Console.capture()", "State.with()", "Exception.tryCatch()"],
@@ -548,9 +530,8 @@ export const additionalDemos: readonly ShowcaseDemo[] = [
     title: "Parallel Async Map",
     tagline: "par.map() for concurrent execution",
     summary: [
-      "Runs multiple async tasks concurrently with par.map().",
-      "Maintains result order matching input order.",
-      "All tasks complete before the result is available.",
+      "`par.map()` issues async tasks concurrently while keeping results ordered.",
+      "Handlers wrap logging and errors so orchestration code stays pure.",
     ],
     features: ["par.map()", "Async", "Console"],
     effectHandlers: ["Console.capture()", "Async.default()", "Exception.tryCatch()"],
@@ -568,9 +549,8 @@ export const additionalDemos: readonly ShowcaseDemo[] = [
     title: "Race to the Finish",
     tagline: "par.race() returns the first winner",
     summary: [
-      "Demonstrates par.race() with multiple competitors.",
-      "First task to complete wins, others are cancelled.",
-      "Useful for timeout patterns and fallbacks.",
+      "`par.race()` returns the fastest competitor and cancels the rest.",
+      "Ideal for composing timeouts and fallback strategies functionally.",
     ],
     features: ["par.race()", "Async", "Console"],
     effectHandlers: ["Console.capture()", "Async.default()", "Exception.tryCatch()"],

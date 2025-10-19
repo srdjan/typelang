@@ -204,14 +204,119 @@
 }
 
 .hero-demo__output {
-  min-height: 80px;
-  background: rgba(8, 9, 12, 0.5);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 1rem;
-  padding: 1rem;
-  font-family: "JetBrains Mono", ui-monospace, monospace;
-  font-size: 0.9rem;
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.hero-demo__result-card {
+  background: rgba(8, 9, 12, 0.6);
+  border: 1px solid rgba(122, 162, 247, 0.22);
+  border-radius: 1.1rem;
+  padding: 1.4rem;
+  display: grid;
+  gap: 1.2rem;
+  box-shadow:
+    var(--shadow),
+    0 12px 28px rgba(8, 9, 12, 0.45);
+}
+
+.hero-demo__result-card--success {
+  border-color: rgba(61, 214, 140, 0.35);
+  box-shadow: 0 16px 36px rgba(61, 214, 140, 0.18);
+}
+
+.hero-demo__result-card--idle {
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow: 0 12px 28px rgba(8, 9, 12, 0.3);
+}
+
+.hero-demo__result-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 1rem;
+}
+
+.hero-demo__result-header h3 {
+  margin: 0;
+  font-size: 1.1rem;
+}
+
+.hero-demo__result-header p {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+  font-size: 0.85rem;
+}
+
+.hero-demo__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+  padding: 0.35rem 0.8rem;
+  border-radius: 999px;
+  background: rgba(61, 214, 140, 0.18);
+  border: 1px solid rgba(61, 214, 140, 0.35);
   color: var(--fg);
+  font-size: 0.8rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.hero-demo__result-grid {
+  display: grid;
+  gap: 1.1rem;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+}
+
+.hero-demo__stack {
+  display: grid;
+  gap: 0.75rem;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 0.9rem;
+  padding: 0.9rem 1rem;
+}
+
+.hero-demo__stack h4 {
+  margin: 0;
+  font-size: 0.95rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.hero-demo__stack ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 0.45rem;
+  font-family: "JetBrains Mono", ui-monospace, monospace;
+  font-size: 0.85rem;
+  color: #dce3ff;
+}
+
+.hero-demo__state {
+  margin: 0;
+  padding: 0.75rem;
+  border-radius: 0.75rem;
+  background: rgba(8, 9, 12, 0.65);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  max-height: 220px;
+  overflow: auto;
+  font-family:
+    "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono",
+    "Courier New", monospace;
+  font-size: 0.8rem;
+  color: #dce3ff;
+}
+
+.hero-demo__empty {
+  margin: 0;
+  font-size: 0.85rem;
+  color: var(--muted);
 }
 
 .hero-demo__placeholder {

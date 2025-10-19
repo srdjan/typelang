@@ -37,54 +37,78 @@ const option = <T>(value: T | null | undefined): Option<T> =>
     { tag: "Some", value: value as T } as const,
   ][Number(value !== null && value !== undefined)];
 
-type Highlight = Readonly<{ title: string; copy: string; bullets: readonly string[] }>;
+type Highlight = Readonly<{
+  title: string;
+  copy: string;
+  bullets: readonly string[];
+  cta: Readonly<{ href: string; label: string }>;
+}>;
 
 const highlights: readonly Highlight[] = [
   {
     title: "Strict Functional Subset",
-    copy: "No classes, no mutation, no loops—typelang enforces expression-oriented TypeScript.",
+    copy: "Tooling keeps every program expression-oriented—no classes, loops, or mutable branches.",
     bullets: [
-      "Subset linter forbids `if`/`else`, loops, mutation, and `new`.",
-      "Pure data builders via `seq()` orchestrate complex workflows.",
-      "Pattern matching replaces control flow with exhaustive cases.",
+      "`seq()` makes effect orchestration explicit and linear.",
+      "`match()` replaces control flow with compiler-enforced cases.",
     ],
+    cta: { href: "/learn/basics", label: "Read the subset guide" },
   },
   {
     title: "Algebraic Effects Runtime",
     copy:
-      "Composable handler stack resolves Console, State, Exception, and Async effects at runtime.",
+      "Composable handlers resolve Console, State, Exception, and Async without leaking promises.",
     bullets: [
-      "Runtime `stack(...handlers).run()` keeps application code pure.",
-      "Handlers capture logs, state snapshots, and structured errors.",
-      "Type-safe capabilities surface unhandled effects during dev.",
+      "Swap handler stacks per environment with zero code changes.",
+      "Trace every effect path through structured diagnostics.",
     ],
+    cta: { href: "/learn/effects", label: "Explore effects walkthrough" },
   },
   {
     title: "Lightweight HTTP Server",
-    copy: "A 250-line Deno server with middleware composition and HTMX-friendly routing.",
+    copy: "A concise Deno server streams demo output over HTMX, keeping requests declarative.",
     bullets: [
-      "Middleware chain: error boundary, logging, CORS, rate limit, auth stub.",
-      "Declarative `Routes` array keeps handler code functional and testable.",
-      "Static assets served via built-in middleware—zero external deps.",
+      "Functional `Routes` map makes endpoints legible in one pass.",
+      "Built-in middleware covers logging, errors, and static assets.",
     ],
+    cta: { href: "/comparison", label: "See the server anatomy" },
   },
   {
     title: "Type-Safe Effect Handling",
     copy:
-      "Handlers.Exception.tryCatch() lifts failures into data so UI code never catches thrown errors.",
+      "Handlers lift failures into data, so UI code never catches thrown errors or swallows logs.",
     bullets: [
       "Console.capture() pipes structured logs into the showcase.",
       "State.with(initial) threads immutable state through seq().",
       "Async.default() integrates timers without exposing Promises.",
     ],
+    cta: { href: "/learn/handlers", label: "Master handler design" },
+  },
+] as const;
+
+type HeroStat = Readonly<{ label: string; description: string }>;
+
+const heroStats: readonly HeroStat[] = [
+  {
+    label: "Strict Subset",
+    description: "Compiler + linter forbid mutation, loops, and imperative control flow.",
+  },
+  {
+    label: "Algebraic Effects",
+    description: "Console, State, Async, Exception handled via composable capability stacks.",
+  },
+  {
+    label: "Runtime Proof",
+    description: "Every demo runs live on the server and streams structured telemetry.",
   },
 ] as const;
 
 // Helper function to render page - needs access to allDemos
 const makeRenderPage =
-  (allDemos: readonly ShowcaseDemo[]) => (selected: ShowcaseDemo, run: DemoRun): string => {
+  (allDemos: readonly ShowcaseDemo[]) => (selected: ShowcaseDemo, run: DemoRun | null): string => {
     const navItems = allDemos.map((demo) => renderNavItem(demo, selected.id)).join("");
     const featureCards = highlights.map(renderHighlightCard).join("");
+    const heroStatItems = heroStats.map(renderHeroStat).join("");
     const showcaseCard = renderDemoCard(selected, run);
 
     return `<!doctype html>
@@ -103,20 +127,17 @@ const makeRenderPage =
       <div class="hero__content">
         <h1>typelang × Deno Showcase</h1>
         <p>
-          Explore a strictly functional TypeScript subset with algebraic effects, sequenced programs,
-          and a no-dependency HTTP runtime. Every demo runs on the server and streams structured data
-          back to the UI.
+          Build purely functional TypeScript with algebraic effects, sequenced programs, and live
+          diagnostics. Every example executes on the server—what you see is what the runtime does.
         </p>
-        <div class="hero__meta">
-          <span class="hero__badge">Zero Dependencies</span>
-          <span class="hero__badge">Handlers: Console · State · Exception · Async</span>
-          <span class="hero__badge">Functional subset enforced by tooling</span>
-        </div>
+        <ul class="hero__stats">
+          ${heroStatItems}
+        </ul>
       </div>
       <aside class="hero__cta">
         <div class="hero__card">
-          <h2>Server Status</h2>
-          <p>Health check endpoint responds with structured JSON.</p>
+          <h2>Server Pulse</h2>
+          <p>Ping the health endpoint to see structured JSON straight from the showcase runtime.</p>
           <button
             class="button button--outline"
             hx-get="/health"
@@ -132,7 +153,13 @@ const makeRenderPage =
     </header>
     <main class="page">
       <section class="highlights">
-        ${featureCards}
+        <div class="section-heading">
+          <h2>Why teams pick typelang</h2>
+          <p>Concise constraints, vivid telemetry, and a server that proves the subset in action.</p>
+        </div>
+        <div class="highlights__grid">
+          ${featureCards}
+        </div>
       </section>
 
       <section class="showcase">
@@ -191,13 +218,25 @@ const renderHighlightCard = (item: Highlight): string => {
     .map((bullet) => `<li>${escapeHtml(bullet)}</li>`)
     .join("");
   return `<article class="highlight-card">
-    <h3>${escapeHtml(item.title)}</h3>
-    <p>${escapeHtml(item.copy)}</p>
-    <ul>${bullets}</ul>
+    <div>
+      <h3>${escapeHtml(item.title)}</h3>
+      <p class="highlight-card__copy">${escapeHtml(item.copy)}</p>
+    </div>
+    <ul class="highlight-card__list">${bullets}</ul>
+    <a class="highlight-card__cta" href="${escapeHtml(item.cta.href)}">${
+    escapeHtml(item.cta.label)
+  }</a>
   </article>`;
 };
 
-const renderDemoCard = (demo: ShowcaseDemo, run: DemoRun): string => {
+const renderHeroStat = (stat: HeroStat): string => {
+  return `<li class="hero__stat">
+    <span class="hero__stat-label">${escapeHtml(stat.label)}</span>
+    <span class="hero__stat-description">${escapeHtml(stat.description)}</span>
+  </li>`;
+};
+
+const renderDemoCard = (demo: ShowcaseDemo, run: DemoRun | null): string => {
   const summary = demo.summary
     .map((point) => `<li>${escapeHtml(point)}</li>`)
     .join("");
@@ -213,6 +252,15 @@ const renderDemoCard = (demo: ShowcaseDemo, run: DemoRun): string => {
     Some: ({ value }) => `<span class="pill pill--ghost">${escapeHtml(value.label)} state</span>`,
     None: () => "",
   });
+  const controls = `<button
+      class="button button--ghost"
+      hx-post="/showcase/${demo.id}/run"
+      hx-trigger="click"
+      hx-target="#demo-run-${demo.id}"
+      hx-swap="innerHTML"
+    >
+      Run demo
+    </button>`;
 
   return `<div class="demo-card" data-demo="${escapeHtml(demo.id)}">
     <header class="demo-card__header">
@@ -220,33 +268,29 @@ const renderDemoCard = (demo: ShowcaseDemo, run: DemoRun): string => {
         <h2>${escapeHtml(demo.title)}</h2>
         <p>${escapeHtml(demo.tagline)}</p>
       </div>
-      <div class="demo-card__tags">
-        ${features}
-        ${handlers}
-        ${stateLabel}
-      </div>
     </header>
 
-    <section class="demo-card__summary">
-      <h3>Why it matters</h3>
-      <ul>${summary}</ul>
+    <section class="demo-card__overview">
+      <div class="demo-card__summary">
+        <h3>Why it matters</h3>
+        <ul>${summary}</ul>
+      </div>
+      <div class="demo-card__meta">
+        <div class="demo-card__tags">
+          ${features}
+          ${handlers}
+          ${stateLabel}
+        </div>
+        <div class="demo-card__controls">
+          ${controls}
+        </div>
+      </div>
     </section>
 
-    <section class="demo-card__code">
-      <div class="demo-card__code-header">
-        <h3>Program</h3>
-        <button
-          class="button button--ghost"
-          hx-post="/showcase/${demo.id}/run"
-          hx-trigger="click"
-          hx-target="#demo-run-${demo.id}"
-          hx-swap="innerHTML"
-        >
-          Run demo
-        </button>
-      </div>
+    <details class="demo-card__panel" open>
+      <summary>Program</summary>
       <pre class="code-block"><code class="language-typelang">${code}</code></pre>
-    </section>
+    </details>
 
     <section class="demo-card__result" id="demo-run-${demo.id}">
       ${runSection}
@@ -254,78 +298,110 @@ const renderDemoCard = (demo: ShowcaseDemo, run: DemoRun): string => {
   </div>`;
 };
 
-const renderRun = (demo: ShowcaseDemo, run: DemoRun): string => {
-  const statusTag = toBoolTag(run.status === "ok");
-  const statusClass = match<BoolTag, string>(statusTag, {
-    True: () => "demo-run__status--ok",
-    False: () => "demo-run__status--error",
-  });
-  const statusText = match<BoolTag, string>(statusTag, {
-    True: () => "Succeeded",
-    False: () => "Failed",
-  });
-  const detailItems = run.detail.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
-  const artifactItems = run.artifacts
-    .map((artifact) =>
-      `<div class="artifact">
-        <span class="artifact__label">${escapeHtml(artifact.label)}</span>
-        <span class="artifact__value">${escapeHtml(artifact.value)}</span>
-      </div>`
-    )
-    .join("");
-  const timelineItems = match(toBoolTag(run.timeline.length > 0), {
-    True: () =>
-      run.timeline
-        .map((event) =>
-          `<li>
-            <span class="timeline__label">${escapeHtml(event.label)}</span>
-            <span class="timeline__message">${escapeHtml(event.message)}</span>
-          </li>`
+const renderRun = (demo: ShowcaseDemo, run: DemoRun | null): string => {
+  return match(option(run), {
+    None: () => {
+      const stateSuffix = match(option(demo.state), {
+        Some: ({ value }) => ` and ${escapeHtml(value.label.toLowerCase())} state snapshots`,
+        None: () => "",
+      });
+      const handlerInfo = match(
+        option(demo.effectHandlers.length > 0 ? demo.effectHandlers : null),
+        {
+          None: () => "",
+          Some: ({ value }) =>
+            `<p class="demo-run__pending-handlers">Handlers: ${escapeHtml(value.join(" · "))}</p>`,
+        },
+      );
+      return `<div class="demo-run demo-run--pending">
+        <div class="demo-run__pending">
+          <h4>Awaiting execution</h4>
+          <p>Console output, timeline events${stateSuffix} will render here after you run the program.</p>
+          ${handlerInfo}
+        </div>
+      </div>`;
+    },
+    Some: ({ value }) => {
+      const statusTag = toBoolTag(value.status === "ok");
+      const statusClass = match<BoolTag, string>(statusTag, {
+        True: () => "demo-run__status--ok",
+        False: () => "demo-run__status--error",
+      });
+      const statusText = match<BoolTag, string>(statusTag, {
+        True: () => "Succeeded",
+        False: () => "Failed",
+      });
+      const detailItems = value.detail.map((item) => `<li>${escapeHtml(item)}</li>`).join("");
+      const artifactItems = value.artifacts
+        .map((artifact) =>
+          `<div class="artifact">
+            <span class="artifact__label">${escapeHtml(artifact.label)}</span>
+            <span class="artifact__value">${escapeHtml(artifact.value)}</span>
+          </div>`
         )
-        .join(""),
-    False: () =>
-      `<li class="timeline__empty">Timeline is empty—run the demo to generate events.</li>`,
+        .join("");
+      const timelineBody = match(toBoolTag(value.timeline.length > 0), {
+        True: () =>
+          `<ul class="timeline-list">${
+            value.timeline
+              .map((event) =>
+                `<li>
+                <span class="timeline__label">${escapeHtml(event.label)}</span>
+                <span class="timeline__message">${escapeHtml(event.message)}</span>
+              </li>`
+              )
+              .join("")
+          }</ul>`,
+        False: () =>
+          `<p class="timeline__empty">Timeline is empty—run the demo to generate events.</p>`,
+      });
+
+      const consoleLogs = renderConsole(value);
+      const stateBlock = renderState(value.state);
+      const diagnosticsOpen = match(statusTag, {
+        True: () => "",
+        False: () => " open",
+      });
+      const stateHeadingSuffix = match(option(demo.state), {
+        Some: ({ value: state }) => ` (${escapeHtml(state.label)})`,
+        None: () => "",
+      });
+
+      return `<div class="demo-run">
+        <div class="demo-run__status ${statusClass}">
+          <strong>${escapeHtml(statusText)}</strong>
+          <span>${escapeHtml(value.headline)}</span>
+          <span class="demo-run__elapsed">${value.elapsedMs}ms</span>
+        </div>
+
+        <div class="demo-run__glance">
+          <div>
+            <h4>What happened</h4>
+            <ul>${detailItems}</ul>
+          </div>
+          <div class="demo-run__artifacts">${artifactItems}</div>
+        </div>
+
+        <details class="demo-run__details"${diagnosticsOpen}>
+          <summary>Inspect diagnostics</summary>
+          <div class="demo-run__details-grid">
+            <article class="demo-run__panel">
+              <h5>Timeline</h5>
+              ${timelineBody}
+            </article>
+            <article class="demo-run__panel">
+              <h5>Console (Console.capture())</h5>
+              <div class="demo-run__panel-body">${consoleLogs}</div>
+            </article>
+            <article class="demo-run__panel">
+              <h5>State Snapshot${stateHeadingSuffix}</h5>
+              <div class="demo-run__panel-body">${stateBlock}</div>
+            </article>
+          </div>
+        </details>
+      </div>`;
+    },
   });
-
-  const consoleLogs = renderConsole(run);
-  const stateBlock = renderState(run.state);
-
-  return `<div class="demo-run">
-    <div class="demo-run__status ${statusClass}">
-      <strong>${escapeHtml(statusText)}</strong>
-      <span>${escapeHtml(run.headline)}</span>
-      <span class="demo-run__elapsed">${run.elapsedMs}ms</span>
-    </div>
-
-    <div class="demo-run__body">
-      <aside class="demo-run__insights">
-        <h4>What happened</h4>
-        <ul>${detailItems}</ul>
-        <div class="demo-run__artifacts">${artifactItems}</div>
-      </aside>
-
-      <div class="demo-run__timeline">
-        <h4>Timeline</h4>
-        <ul>${timelineItems}</ul>
-      </div>
-    </div>
-
-    <div class="demo-run__console">
-      <div>
-        <h4>Console (Console.capture())</h4>
-        ${consoleLogs}
-      </div>
-      <div>
-        <h4>State Snapshot${
-    match(option(demo.state), {
-      Some: ({ value }) => ` (${escapeHtml(value.label)})`,
-      None: () => "",
-    })
-  }</h4>
-        ${stateBlock}
-      </div>
-    </div>
-  </div>`;
 };
 
 const renderConsole = (run: DemoRun): string => {
@@ -443,17 +519,37 @@ export const routes: Routes = [
         }),
       };
       const run = await runDemo(miniDemo);
-      const consoleOutput = run.console.logs.map((log) => `<div>${escapeHtml(log)}</div>`).join("");
-      const stateOutput = run.state
-        ? `<div>State: ${escapeHtml(JSON.stringify(run.state))}</div>`
-        : "";
-      return html(`<div class="hero-demo__result">
-        <strong>Console Output:</strong>
-        ${consoleOutput}
-        <strong>Final State:</strong>
-        ${stateOutput}
-        <p class="hero-demo__success">✅ Executed in ${run.elapsedMs}ms</p>
-      </div>`);
+      const consoleItems = match(toBoolTag(run.console.logs.length > 0), {
+        True: () =>
+          run.console.logs
+            .map((log) => `<li>${escapeHtml(log)}</li>`)
+            .join(""),
+        False: () => `<li class="hero-demo__empty">No Console output this run.</li>`,
+      });
+      const stateMarkup = match(option(run.state), {
+        Some: ({ value }) =>
+          `<pre class="hero-demo__state">${escapeHtml(JSON.stringify(value, null, 2))}</pre>`,
+        None: () => `<p class="hero-demo__empty">State handler not attached.</p>`,
+      });
+      return html(`<article class="hero-demo__result-card hero-demo__result-card--success">
+        <header class="hero-demo__result-header">
+          <div>
+            <h3>Mini Counter Run</h3>
+            <p>Console + State handlers in four declarative steps.</p>
+          </div>
+          <span class="hero-demo__badge">${run.elapsedMs}ms</span>
+        </header>
+        <div class="hero-demo__result-grid">
+          <section class="hero-demo__stack">
+            <h4>Console</h4>
+            <ul>${consoleItems}</ul>
+          </section>
+          <section class="hero-demo__stack">
+            <h4>State</h4>
+            ${stateMarkup}
+          </section>
+        </div>
+      </article>`);
     },
   },
   {
@@ -461,8 +557,7 @@ export const routes: Routes = [
     path: "/demos",
     handler: async () => {
       const [first] = allDemos;
-      const run = await runDemo(first);
-      return html(renderPage(first, run));
+      return html(renderPage(first, null));
     },
   },
   {
@@ -472,8 +567,7 @@ export const routes: Routes = [
       const selected = option(allDemos.find((d) => d.id === params.id) ?? null);
       return await match(selected, {
         Some: async ({ value }) => {
-          const run = await runDemo(value);
-          return html(renderDemoCard(value, run));
+          return html(renderDemoCard(value, null));
         },
         None: async () =>
           html(`<div class="demo-card__empty">Demo not found.</div>`, { status: 404 }),
@@ -487,8 +581,7 @@ export const routes: Routes = [
       const selected = option(allDemos.find((d) => d.id === params.id) ?? null);
       return await match(selected, {
         Some: async ({ value }) => {
-          const run = await runDemo(value);
-          return html(renderPage(value, run));
+          return html(renderPage(value, null));
         },
         None: async () =>
           html(`<div class="demo-card__empty">Demo not found.</div>`, { status: 404 }),

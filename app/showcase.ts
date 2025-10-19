@@ -181,9 +181,8 @@ const presentWorkflow = (run: NormalizedRun): DemoRun =>
         status: "ok",
         headline: `Stage advanced to ${stageLabel(snapshot.stage)}`,
         detail: [
-          "Pure sequencing with `seq()` updates State without mutation.",
-          "Console handler captures the audit trail automatically.",
-          "Pattern matching ensures exhaustive stage transitions.",
+          "`seq()` threads workflow state without any mutable branches.",
+          "Console + Exception handlers capture an auditable trail on every hop.",
         ],
         artifacts: [
           { label: "Current Stage", value: stageLabel(snapshot.stage) },
@@ -199,8 +198,7 @@ const presentWorkflow = (run: NormalizedRun): DemoRun =>
       status: "error",
       headline: "Workflow cannot progress",
       detail: [
-        "Exception handler safely short-circuited the transition.",
-        "Handlers.Exception.tryCatch() produced a typed Result.",
+        "Exception handler short-circuited the transition with a typed payload.",
       ],
       artifacts: [{ label: "Error", value: jsonStringify(error) }],
       console: run.console,
@@ -299,9 +297,8 @@ const presentParallel = (run: NormalizedRun): DemoRun =>
         status: "ok",
         headline: `${snapshot.fastest.label} finished first`,
         detail: [
-          "par.all() launches independent effect handlers in parallel.",
-          "par.race()-style reduction picks the fastest completion deterministically.",
-          "Async handler remains pure at call sites—no direct Promises.",
+          "`par.all()` fans out async work without exposing Promises to the caller.",
+          "A deterministic reduction step compares elapsed times to choose the champion.",
         ],
         artifacts: [
           {
@@ -331,8 +328,7 @@ const presentParallel = (run: NormalizedRun): DemoRun =>
       status: "error",
       headline: "Parallel execution failed",
       detail: [
-        "Async tasks surfaced a rejected effect.",
-        "Inspect the error payload to identify the failing branch.",
+        "An async branch rejected—inspect the payload for the source descriptor.",
       ],
       artifacts: [{ label: "Error", value: jsonStringify(error) }],
       console: run.console,
@@ -474,9 +470,8 @@ const presentConfig = (run: NormalizedRun): DemoRun =>
         status: "ok",
         headline: `${snapshot.label} ready with ${modeLabel(snapshot.feature)}`,
         detail: [
-          "Explicit matching replaces `if`/`else` branching.",
-          "Exception handler doubles as typed validation boundary.",
-          "pipe() keeps the transformation linear and readable.",
+          "`match()` + `seq()` validate configs without imperative branching.",
+          "Exception handler doubles as a typed boundary for invalid input.",
         ],
         artifacts: [
           { label: "Feature Mode", value: modeLabel(snapshot.feature) },
@@ -502,8 +497,7 @@ const presentConfig = (run: NormalizedRun): DemoRun =>
         status: "error",
         headline,
         detail: [
-          "Handlers.Exception.tryCatch() surfaced a structured ConfigError.",
-          "Handle errors as data—no thrown exceptions leak past the runtime.",
+          "Exception handler surfaced a structured ConfigError—no thrown errors escaped.",
         ],
         artifacts: [{ label: "Error detail", value: jsonStringify(diag) }],
         console: run.console,
@@ -522,9 +516,8 @@ export const demos: readonly ShowcaseDemo[] = [
     title: "Pure Workflow Sequencing",
     tagline: "State + Console + Exception with seq()",
     summary: [
-      "Demonstrates State effect orchestration via seq().",
-      "Uses pattern matching to enforce total stage coverage.",
-      "Captures logs without side-effects thanks to Console handler.",
+      "`seq()` advances workflow state while keeping data immutable.",
+      "Console + Exception handlers yield audit trails automatically.",
     ],
     features: ["seq()", "State", "Console", "match()", "pipe()"],
     effectHandlers: ["Console.capture()", "State.with()", "Exception.tryCatch()"],
@@ -564,9 +557,8 @@ const workflow = (): Eff<WorkflowSnapshot, WorkflowCaps> =>
     title: "Parallel Effect Handlers",
     tagline: "Async handler + par combinators",
     summary: [
-      "Runs three effectful tasks concurrently with par.all().",
-      "Reduces results into a champion using exhaustive matching.",
-      "Highlights zero Promise usage in application code.",
+      "`par.all()` fans out async computation with typed handlers.",
+      "Deterministic reduction highlights the champion task without Promises.",
     ],
     features: ["par.all()", "par.race()", "Async", "Console"],
     effectHandlers: ["Console.capture()", "Exception.tryCatch()", "Async.default()"],
@@ -612,9 +604,8 @@ const program = (): Eff<ParallelSnapshot, ParallelProgramCaps> =>
     title: "Typed Exception Guards",
     tagline: "Total validation with match() + Exception",
     summary: [
-      "Validates config inputs without branching statements.",
-      "Propagates structured errors through Exception handler.",
-      "Keeps transformation linear with seq() and pipe().",
+      "`match()` replaces `if`/`else` for total validation paths.",
+      "Exception handlers return typed errors instead of thrown exceptions.",
     ],
     features: ["Exception", "match()", "seq()", "Console"],
     effectHandlers: ["Console.capture()", "Exception.tryCatch()"],

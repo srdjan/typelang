@@ -318,7 +318,9 @@ const tick = () =>
       ${renderButton(miniDemoBtn)}
     </div>
     <div id="hero-demo-output" class="hero-demo__output">
-      <p class="hero-demo__placeholder">Click "Run" to see effects in action</p>
+      <article class="hero-demo__result-card hero-demo__result-card--idle">
+        <p class="hero-demo__placeholder">Click "Run" to see the handlers execute live.</p>
+      </article>
     </div>
   </div>`;
 };

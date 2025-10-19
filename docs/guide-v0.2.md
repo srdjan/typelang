@@ -67,7 +67,7 @@ type AppCaps = {
 
 const tick = (): Eff<number, AppCaps> =>
   seq()
-    .let(() => State.get<{ n: number }>()) // ctx.v1
+    .let(() => State.get<{ n: number }>())
     .then((s) => ({ n: s.n + 1 }))
     .tap((next) => State.put(next))
     .tap((next) => Console.log(`n=${next.n}`))
