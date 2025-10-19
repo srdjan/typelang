@@ -8,6 +8,62 @@
   min-height: 100vh;
 }
 
+/* Header Navigation */
+.landing-header {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  background: rgba(8, 9, 12, 0.85);
+  border-bottom: 1px solid rgba(122, 162, 247, 0.1);
+  backdrop-filter: blur(12px);
+}
+
+.landing-header__container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem clamp(2rem, 6vw, 8rem);
+  max-width: 1600px;
+  margin: 0 auto;
+}
+
+.landing-header__logo {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: var(--fg);
+  text-decoration: none;
+  transition: color 150ms ease;
+}
+
+.landing-header__logo:hover {
+  color: var(--accent);
+}
+
+.landing-header__github {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.6rem;
+  border-radius: 9999px;
+  background: rgba(122, 162, 247, 0.1);
+  border: 1px solid rgba(122, 162, 247, 0.25);
+  color: var(--fg);
+  text-decoration: none;
+  transition: all 150ms ease;
+}
+
+.landing-header__github:hover {
+  background: rgba(122, 162, 247, 0.2);
+  border-color: rgba(122, 162, 247, 0.4);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(122, 162, 247, 0.2);
+}
+
+.landing-header__github svg {
+  width: 22px;
+  height: 22px;
+}
+
 /* Hero Section */
 .landing-hero {
   display: grid;
@@ -542,6 +598,10 @@
 }
 
 @media (max-width: 640px) {
+  .landing-header__container {
+    padding: 1rem 1.5rem;
+  }
+
   .landing-section {
     padding: 3rem 1.5rem;
   }
