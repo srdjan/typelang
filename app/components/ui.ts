@@ -402,7 +402,7 @@ export const renderPageLayout = (layout: PageLayout): string => {
     <title>${escapeHtml(layout.title)} - typelang</title>
     <meta name="description" content="${escapeHtml(layout.description)}" />
     <meta name="color-scheme" content="light dark" />
-    <script src="https://unpkg.com/htmx.org@2.0.3"></script>
+    <script src="https://unpkg.com/htmx.org@2.0.7"></script>
     <link rel="stylesheet" href="/static/app.css?v=4" />
   </head>
   <body>

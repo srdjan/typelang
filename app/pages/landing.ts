@@ -414,7 +414,7 @@ export const renderLandingPage = (): string => {
     <meta property="og:title" content="typelang - Functional TypeScript with Algebraic Effects" />
     <meta property="og:description" content="Build reliable software with effect tracking, enforced purity, and zero runtime errors." />
     <meta property="og:type" content="website" />
-    <script src="https://unpkg.com/htmx.org@2.0.3"></script>
+    <script src="https://unpkg.com/htmx.org@2.0.7"></script>
     <link rel="stylesheet" href="/static/app.css?v=4" />
     <link rel="stylesheet" href="/static/landing.css?v=4" />
   </head>

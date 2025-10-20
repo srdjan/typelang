@@ -86,7 +86,7 @@ const makeRenderPage =
     <title>typelang Showcase</title>
     <meta name="description" content="Interactive typelang showcase demonstrating algebraic effects, functional subset enforcement, and the Deno HTTP runtime." />
     <meta name="color-scheme" content="light dark" />
-    <script src="https://unpkg.com/htmx.org@2.0.3"></script>
+    <script src="https://unpkg.com/htmx.org@2.0.7"></script>
     <link rel="stylesheet" href="/static/app.css?v=4" />
   </head>
   <body>

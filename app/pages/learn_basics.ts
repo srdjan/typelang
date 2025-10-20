@@ -319,7 +319,7 @@ export const renderLearnBasicsPage = (): string => {
     <title>Learn Basics - typelang</title>
     <meta name="description" content="Master the core concepts of typelang: seq(), match(), pipe(), and discriminated unions." />
     <meta name="color-scheme" content="light dark" />
-    <script src="https://unpkg.com/htmx.org@2.0.3"></script>
+    <script src="https://unpkg.com/htmx.org@2.0.7"></script>
     <link rel="stylesheet" href="/static/app.css?v=4" />
     <link rel="stylesheet" href="/static/learn.css?v=4" />
   </head>
