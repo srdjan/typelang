@@ -328,7 +328,7 @@
 
 /* Sections */
 .landing-section {
-  padding: 5rem clamp(2rem, 6vw, 8rem);
+  padding: 1rem clamp(2rem, 6vw, 8rem);
   position: relative;
 }
 

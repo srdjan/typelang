@@ -47,59 +47,27 @@ type Highlight = Readonly<{
 const highlights: readonly Highlight[] = [
   {
     title: "Strict Functional Subset",
-    copy: "Tooling keeps every program expression-oriented—no classes, loops, or mutable branches.",
-    bullets: [
-      "`seq()` makes effect orchestration explicit and linear.",
-      "`match()` replaces control flow with compiler-enforced cases.",
-    ],
+    copy: "",
+    bullets: [],
     cta: { href: "/learn/basics", label: "Read the subset guide" },
   },
   {
     title: "Algebraic Effects Runtime",
-    copy:
-      "Composable handlers resolve Console, State, Exception, and Async without leaking promises.",
-    bullets: [
-      "Swap handler stacks per environment with zero code changes.",
-      "Trace every effect path through structured diagnostics.",
-    ],
+    copy: "",
+    bullets: [],
     cta: { href: "/learn/effects", label: "Explore effects walkthrough" },
   },
   {
     title: "Lightweight HTTP Server",
-    copy: "A concise Deno server streams demo output over HTMX, keeping requests declarative.",
-    bullets: [
-      "Functional `Routes` map makes endpoints legible in one pass.",
-      "Built-in middleware covers logging, errors, and static assets.",
-    ],
+    copy: "",
+    bullets: [],
     cta: { href: "/comparison", label: "See the server anatomy" },
   },
   {
     title: "Type-Safe Effect Handling",
-    copy:
-      "Handlers lift failures into data, so UI code never catches thrown errors or swallows logs.",
-    bullets: [
-      "Console.capture() pipes structured logs into the showcase.",
-      "State.with(initial) threads immutable state through seq().",
-      "Async.default() integrates timers without exposing Promises.",
-    ],
+    copy: "",
+    bullets: [],
     cta: { href: "/learn/handlers", label: "Master handler design" },
-  },
-] as const;
-
-type HeroStat = Readonly<{ label: string; description: string }>;
-
-const heroStats: readonly HeroStat[] = [
-  {
-    label: "Strict Subset",
-    description: "Compiler + linter forbid mutation, loops, and imperative control flow.",
-  },
-  {
-    label: "Algebraic Effects",
-    description: "Console, State, Async, Exception handled via composable capability stacks.",
-  },
-  {
-    label: "Runtime Proof",
-    description: "Every demo runs live on the server and streams structured telemetry.",
   },
 ] as const;
 
@@ -108,7 +76,6 @@ const makeRenderPage =
   (allDemos: readonly ShowcaseDemo[]) => (selected: ShowcaseDemo, run: DemoRun | null): string => {
     const navItems = allDemos.map((demo) => renderNavItem(demo, selected.id)).join("");
     const featureCards = highlights.map(renderHighlightCard).join("");
-    const heroStatItems = heroStats.map(renderHeroStat).join("");
     const showcaseCard = renderDemoCard(selected, run);
 
     return `<!doctype html>
@@ -126,37 +93,10 @@ const makeRenderPage =
     <header class="hero">
       <div class="hero__content">
         <h1>typelang × Deno Showcase</h1>
-        <p>
-          Build purely functional TypeScript with algebraic effects, sequenced programs, and live
-          diagnostics. Every example executes on the server—what you see is what the runtime does.
-        </p>
-        <ul class="hero__stats">
-          ${heroStatItems}
-        </ul>
       </div>
-      <aside class="hero__cta">
-        <div class="hero__card">
-          <h2>Server Pulse</h2>
-          <p>Ping the health endpoint to see structured JSON straight from the showcase runtime.</p>
-          <button
-            class="button button--outline"
-            hx-get="/health"
-            hx-trigger="click"
-            hx-target="#health-response"
-            hx-swap="innerHTML"
-          >
-            Ping /health
-          </button>
-          <div id="health-response" class="hero__response"></div>
-        </div>
-      </aside>
     </header>
     <main class="page">
       <section class="highlights">
-        <div class="section-heading">
-          <h2>Why teams pick typelang</h2>
-          <p>Concise constraints, vivid telemetry, and a server that proves the subset in action.</p>
-        </div>
         <div class="highlights__grid">
           ${featureCards}
         </div>
@@ -179,7 +119,7 @@ const makeRenderPage =
     </main>
     <footer class="footer">
       <p>
-        Built with typelang's effect runtime, strict functional subset, and the lightweight Deno server.
+        Built with TypeLang.
         View the docs and tests in <code>docs/</code> and <code>tests/</code>.
       </p>
     </footer>
@@ -227,13 +167,6 @@ const renderHighlightCard = (item: Highlight): string => {
     escapeHtml(item.cta.label)
   }</a>
   </article>`;
-};
-
-const renderHeroStat = (stat: HeroStat): string => {
-  return `<li class="hero__stat">
-    <span class="hero__stat-label">${escapeHtml(stat.label)}</span>
-    <span class="hero__stat-description">${escapeHtml(stat.description)}</span>
-  </li>`;
 };
 
 const renderDemoCard = (demo: ShowcaseDemo, run: DemoRun | null): string => {

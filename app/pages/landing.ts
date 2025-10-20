@@ -456,10 +456,6 @@ export const renderLandingPage = (): string => {
     </header>
 
     <section class="landing-section landing-section--comparison">
-      <div class="landing-section__header">
-        <h2>See the Difference</h2>
-        <p>Compare traditional TypeScript with typelang's functional approach</p>
-      </div>
       ${comparisonWidgetHtml}
     </section>
 
