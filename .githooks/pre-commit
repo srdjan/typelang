@@ -1,9 +1,6 @@
 #!/bin/bash
 set -e
 
-echo "Running deno fmt..."
-deno fmt
-
 echo "Running pre-commit checks..."
 
 echo "→ Checking format..."
