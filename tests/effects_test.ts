@@ -9,7 +9,7 @@ Deno.test("custom effects compose with built-ins", async () => {
   const customHandler: Handler = {
     name: "Custom",
     handles: {
-      greet: (instr) => {
+      greet: (instr, next, ctx) => {
         const [name] = instr.args;
         return `Hello, ${name}!`;
       },
@@ -33,7 +33,7 @@ Deno.test("handlers can intercept and transform operations", async () => {
   const interceptHandler: Handler = {
     name: "Console",
     handles: {
-      log: (instr) => {
+      log: (instr, next, ctx) => {
         const [msg] = instr.args;
         captured.push(`[INTERCEPTED] ${msg}`);
       },

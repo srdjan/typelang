@@ -7,7 +7,7 @@ Deno.test("seq.when executes branch when predicate is true", async () => {
   const customHandler = {
     name: "Console",
     handles: {
-      log: (instr: { args: readonly unknown[] }) => {
+      log: (instr: { args: readonly unknown[] }, next: unknown, ctx: unknown) => {
         logs.push(String(instr.args[0]));
       },
     },
@@ -31,7 +31,7 @@ Deno.test("seq.when skips branch when predicate is false", async () => {
   const customHandler = {
     name: "Console",
     handles: {
-      log: (instr: { args: readonly unknown[] }) => {
+      log: (instr: { args: readonly unknown[] }, next: unknown, ctx: unknown) => {
         logs.push(String(instr.args[0]));
       },
     },
@@ -54,7 +54,7 @@ Deno.test("seq.when preserves context", async () => {
   const customHandler = {
     name: "Console",
     handles: {
-      log: () => {}, // No-op
+      log: (instr: unknown, next: unknown, ctx: unknown) => {}, // No-op
     },
   };
 

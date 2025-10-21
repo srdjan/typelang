@@ -51,17 +51,17 @@ const greet = (name: string) =>
 const consoleHandler = (): Handler => ({
   name: "Console",
   handles: {
-    log: (instr, next) => {
+    log: (instr, next, ctx) => {
       const [message] = instr.args;
       console.log(\`[LOG] \${message}\`);  // Actual side effect!
       return next(undefined);
     },
-    warn: (instr, next) => {
+    warn: (instr, next, ctx) => {
       const [message] = instr.args;
       console.warn(\`[WARN] \${message}\`);
       return next(undefined);
     },
-    error: (instr, next) => {
+    error: (instr, next, ctx) => {
       const [message] = instr.args;
       console.error(\`[ERROR] \${message}\`);
       return next(undefined);
@@ -77,7 +77,7 @@ const result = await stack(consoleHandler()).run(() => greet("Alice"));
       "Handlers map effect operations to concrete implementations",
       "Each handler has a name matching an effect type",
       "handles object maps operation names to handler functions",
-      "Handler functions receive (instruction, next) and can resume or transform",
+      "Handler functions receive (instruction, next, ctx) for cancellation support",
       "stack(...handlers).run(program) executes with handler stack",
     ],
     tryItUrl: "/playground?example=basic-handler",
@@ -187,17 +187,17 @@ const datadogMetricsHandler = (apiKey: string): Handler => {
   return {
     name: "Metrics",
     handles: {
-      count: (instr, next) => {
+      count: (instr, next, ctx) => {
         const [name, value] = instr.args;
         send("count", name, value);  // Fire and forget
         return next(undefined);
       },
-      gauge: (instr, next) => {
+      gauge: (instr, next, ctx) => {
         const [name, value] = instr.args;
         send("gauge", name, value);
         return next(undefined);
       },
-      histogram: (instr, next) => {
+      histogram: (instr, next, ctx) => {
         const [name, value] = instr.args;
         send("histogram", name, value);
         return next(undefined);
@@ -213,17 +213,17 @@ const testMetricsHandler = (): Handler => {
   return {
     name: "Metrics",
     handles: {
-      count: (instr, next) => {
+      count: (instr, next, ctx) => {
         const [name, value] = instr.args;
         recorded.push({type: "count", name, value});
         return next(undefined);
       },
-      gauge: (instr, next) => {
+      gauge: (instr, next, ctx) => {
         const [name, value] = instr.args;
         recorded.push({type: "gauge", name, value});
         return next(undefined);
       },
-      histogram: (instr, next) => {
+      histogram: (instr, next, ctx) => {
         const [name, value] = instr.args;
         recorded.push({type: "histogram", name, value});
         return next(undefined);
@@ -243,9 +243,10 @@ await stack(mock).run(myProgram);
 console.log(mock.recorded);  // Check what metrics were sent`,
     keyPoints: [
       "Handler = { name, handles: {...} }",
-      "handles maps operation names to (instr, next) => result",
+      "handles maps operation names to (instr, next, ctx) => result",
       "instr.args contains operation arguments as array",
       "next(value) resumes the program with value",
+      "ctx provides cancellation signal and cleanup registration",
       "Handlers can have state (closures) for recording/caching",
       "Same effect, different handlers = different behavior",
     ],
@@ -316,6 +317,85 @@ await stack(
       "Test with different stacks: production vs development vs test",
     ],
     tryItUrl: "/playground?example=handler-composition",
+  },
+  {
+    id: "cancellation-cleanup",
+    title: "Cancellation & Cleanup",
+    tagline: "Automatic resource disposal and graceful shutdown",
+    explanation: [
+      "typelang v0.3.0 introduces automatic cancellation and cleanup inspired by Effection's resource management.",
+      "Cancellation is completely transparent: you never pass AbortSignal manually—it's handled automatically through the CancellationContext.",
+      "Handlers receive a third parameter 'ctx' that provides access to the cancellation signal and cleanup registration.",
+      "When Ctrl-C is pressed (SIGINT/SIGTERM), all registered cleanup callbacks execute in LIFO order (reverse of acquisition).",
+      "Parallel operations (par.race, par.all) automatically cancel losing/failed branches and run their cleanup callbacks.",
+    ],
+    codeExample: `import { Handler, stack } from "../typelang/mod.ts";
+
+// 1. Cancelable HTTP request handler
+const httpHandler = (): Handler => ({
+  name: "Http",
+  handles: {
+    get: async (instr, next, ctx) => {
+      const [url] = instr.args;
+      // Pass ctx.signal to fetch for automatic cancellation
+      return await fetch(url, { signal: ctx.signal });
+    },
+  },
+});
+
+// 2. File handler with cleanup
+const fileHandler = (): Handler => ({
+  name: "File",
+  handles: {
+    open: async (instr, next, ctx) => {
+      const [path] = instr.args;
+      const file = await Deno.open(path, { read: true });
+
+      // Register cleanup callback (runs in LIFO order)
+      ctx.onCancel(async () => {
+        await file.close();
+        console.log(\`Cleaned up file: \${path}\`);
+      });
+
+      return file;
+    },
+  },
+});
+
+// 3. Timer handler with cancellation
+const timerHandler = (): Handler => ({
+  name: "Timer",
+  handles: {
+    after: (instr, next, ctx) =>
+      new Promise((resolve) => {
+        const [ms, value] = instr.args;
+        const timerId = setTimeout(() => resolve(value), ms);
+
+        // Cleanup timer on cancellation
+        ctx.onCancel(() => clearTimeout(timerId));
+      }),
+  },
+});
+
+// Usage: Press Ctrl-C → cleanup runs automatically
+const program = () =>
+  seq()
+    .let(() => File.op.open("/tmp/data.txt"))
+    .let(() => Timer.op.after(5000, "timeout"))
+    .return((result) => result);
+
+await stack(fileHandler(), timerHandler()).run(program);
+// Ctrl-C → clearTimeout() and file.close() called in LIFO order`,
+    keyPoints: [
+      "ctx.signal provides AbortSignal for cancelable APIs (fetch, setTimeout)",
+      "ctx.onCancel(cleanup) registers cleanup callbacks in LIFO order",
+      "SIGINT/SIGTERM automatically trigger cleanup and graceful shutdown",
+      "par.race() cancels losers; par.all() cancels siblings on failure",
+      "Cleanup errors are logged but don't propagate (fail-safe)",
+      "5-second default timeout prevents hung cleanup callbacks",
+      "Register cleanup IMMEDIATELY after resource acquisition",
+    ],
+    tryItUrl: null,
   },
 ] as const;
 

@@ -114,14 +114,22 @@ const runCleanups = async (
     }
   })();
 
+  let timeoutId: number | undefined;
   const timeoutPromise = new Promise<void>((resolve) => {
-    setTimeout(() => {
+    timeoutId = setTimeout(() => {
       console.warn(`Cleanup timeout exceeded (${timeoutMs}ms) - forcing continuation`);
       resolve();
     }, timeoutMs);
   });
 
-  await Promise.race([cleanupPromise, timeoutPromise]);
+  try {
+    await Promise.race([cleanupPromise, timeoutPromise]);
+  } finally {
+    // Always clear the timeout to prevent resource leak
+    if (timeoutId !== undefined) {
+      clearTimeout(timeoutId);
+    }
+  }
 };
 
 const createCancellationContext = (runtime: RuntimeInstance): CancellationContext => {
@@ -150,12 +158,12 @@ const createCancellationContext = (runtime: RuntimeInstance): CancellationContex
       }
 
       // Otherwise, register for later execution
-      const cleanups = runtime.cleanupStacks.get(controller);
-      if (cleanups) {
-        cleanups.push(cleanup);
-      } else {
-        runtime.cleanupStacks.set(controller, [cleanup]);
+      let cleanups = runtime.cleanupStacks.get(controller);
+      if (!cleanups) {
+        cleanups = [];
+        runtime.cleanupStacks.set(controller, cleanups);
       }
+      cleanups.push(cleanup);
     },
   };
 };
@@ -317,7 +325,7 @@ export const getCurrentScopeController = (): AbortController | null => {
 
 /**
  * Execute a thunk with a specific AbortController pushed to the stack.
- * Cleanup only runs if the controller is aborted.
+ * Cleanup runs if the controller is aborted OR if an error occurs.
  * Use this for per-branch controllers in parallel operations.
  */
 export const withController = async <T>(
@@ -331,14 +339,18 @@ export const withController = async <T>(
 
   runtime.controllerStack.push(controller);
 
+  let error: unknown = undefined;
   try {
     const result = await thunk();
     return result;
+  } catch (e) {
+    error = e;
+    throw e;
   } finally {
     runtime.controllerStack.pop();
 
-    // Only run cleanup if this scope was aborted
-    if (controller.signal.aborted) {
+    // Run cleanup if this scope was aborted OR if an error occurred
+    if (controller.signal.aborted || error !== undefined) {
       await runCleanups(runtime, controller);
     }
   }
