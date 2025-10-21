@@ -7,6 +7,7 @@
 all custom handler implementations.
 
 **Key Benefits:**
+
 - ✅ Automatic cleanup on Ctrl-C (SIGINT/SIGTERM)
 - ✅ Structured concurrency with parent→child cancellation propagation
 - ✅ Resource leak prevention via LIFO cleanup callbacks
@@ -21,6 +22,7 @@ all custom handler implementations.
 **All handlers must add a third parameter `ctx: CancellationContext`.**
 
 #### Before (v0.2.x):
+
 ```typescript
 const myHandler: Handler = {
   name: "MyEffect",
@@ -28,21 +30,22 @@ const myHandler: Handler = {
     doSomething: (instr, next) => {
       const [arg] = instr.args;
       return processArg(arg);
-    }
-  }
+    },
+  },
 };
 ```
 
 #### After (v0.3.0):
+
 ```typescript
 const myHandler: Handler = {
   name: "MyEffect",
   handles: {
-    doSomething: (instr, next, ctx) => {  // ← Added ctx parameter
+    doSomething: (instr, next, ctx) => { // ← Added ctx parameter
       const [arg] = instr.args;
       return processArg(arg);
-    }
-  }
+    },
+  },
 };
 ```
 
@@ -50,8 +53,8 @@ const myHandler: Handler = {
 
 ```typescript
 type CancellationContext = {
-  readonly signal: AbortSignal;  // Check if cancelled
-  readonly onCancel: (cleanup: () => void | Promise<void>) => void;  // Register cleanup
+  readonly signal: AbortSignal; // Check if cancelled
+  readonly onCancel: (cleanup: () => void | Promise<void>) => void; // Register cleanup
 };
 ```
 
@@ -69,6 +72,7 @@ rg "handles:\s*\{" --type ts
 ```
 
 **Affected handlers:**
+
 - Custom effect handlers (your domain effects)
 - Middleware handlers (if using custom middleware)
 - Test fixtures (mock handlers)
@@ -78,23 +82,23 @@ rg "handles:\s*\{" --type ts
 ```typescript
 // Pattern 1: Simple handler (no cancellation logic needed)
 handles: {
-  log: (instr, next, ctx) => {  // ← Add ctx even if unused
+  log: ((instr, next, ctx) => { // ← Add ctx even if unused
     console.log(...instr.args);
-  }
+  });
 }
 
 // Pattern 2: Async handler with cancelable API
 handles: {
-  fetch: async (instr, next, ctx) => {
+  fetch: (async (instr, next, ctx) => {
     const [url] = instr.args;
     // Pass signal to fetch for automatic cancellation
     return await fetch(url, { signal: ctx.signal });
-  }
+  });
 }
 
 // Pattern 3: Handler with resource cleanup
 handles: {
-  openFile: async (instr, next, ctx) => {
+  openFile: (async (instr, next, ctx) => {
     const [path] = instr.args;
     const file = await Deno.open(path, { read: true });
 
@@ -105,7 +109,7 @@ handles: {
     });
 
     return file;
-  }
+  });
 }
 ```
 
@@ -114,6 +118,7 @@ handles: {
 Review your handlers for resource acquisition and register cleanup callbacks:
 
 **Resources requiring cleanup:**
+
 - File handles (`Deno.open`, `file.close()`)
 - Network connections (WebSocket, database connections)
 - Timers (`setTimeout`, `setInterval`)
@@ -150,7 +155,7 @@ they've been updated automatically. However, note new features:
    ```typescript
    // Create a long-running program
    const program = seq()
-     .let(() => Async.op.sleep(10000))  // 10 seconds
+     .let(() => Async.op.sleep(10000)) // 10 seconds
      .tap(() => Console.op.log("Completed"))
      .value();
 
@@ -176,8 +181,8 @@ they've been updated automatically. However, note new features:
 
          // Simulate error → cleanup should fire
          throw new Error("Test error");
-       }
-     }
+       },
+     },
    };
 
    try {
@@ -215,12 +220,12 @@ const apiHandler: Handler = {
       // Merge ctx.signal with user options
       const response = await fetch(endpoint, {
         ...options,
-        signal: ctx.signal  // ← Automatic cancellation
+        signal: ctx.signal, // ← Automatic cancellation
       });
 
       return await response.json();
-    }
-  }
+    },
+  },
 };
 ```
 
@@ -237,8 +242,8 @@ const timerHandler: Handler = {
 
         // Clean up timer on cancellation
         ctx.onCancel(() => clearTimeout(timerId));
-      })
-  }
+      }),
+  },
 };
 ```
 
@@ -258,8 +263,8 @@ const lockHandler: Handler = {
       });
 
       return lockName;
-    }
-  }
+    },
+  },
 };
 ```
 
@@ -270,11 +275,13 @@ const lockHandler: Handler = {
 ### Issue: TypeScript errors about handler signature
 
 **Error:**
+
 ```
 Type '(instr: AnyInstr, next: Next) => ...' is not assignable to type 'HandlerFn'.
 ```
 
 **Solution:** Add `ctx` parameter to the handler function:
+
 ```typescript
 // Before
 (instr, next) => ...
@@ -286,11 +293,13 @@ Type '(instr: AnyInstr, next: Next) => ...' is not assignable to type 'HandlerFn
 ### Issue: Cleanup not running
 
 **Possible causes:**
+
 1. Cleanup registered after operation completes
 2. Controller never aborted (normal completion)
 3. Exception in cleanup callback (logged but swallowed)
 
 **Solution:**
+
 ```typescript
 // ✅ Correct: Register cleanup immediately after acquisition
 const resource = await acquire();
@@ -299,12 +308,13 @@ ctx.onCancel(() => resource.release());
 // ❌ Wrong: Registering cleanup after use
 const resource = await acquire();
 await use(resource);
-ctx.onCancel(() => resource.release());  // Too late if use() throws!
+ctx.onCancel(() => resource.release()); // Too late if use() throws!
 ```
 
 ### Issue: Cleanup timeout warnings
 
 **Warning:**
+
 ```
 Cleanup timeout exceeded (5000ms) - forcing continuation
 ```
@@ -312,6 +322,7 @@ Cleanup timeout exceeded (5000ms) - forcing continuation
 **Cause:** Cleanup callback taking longer than 5 seconds.
 
 **Solution:**
+
 - Reduce cleanup work (close connections faster)
 - Increase timeout (future: configurable)
 - Investigate hung operations
@@ -343,10 +354,10 @@ If you encounter issues with v0.3.0, you can temporarily roll back to v0.2.x:
 
 ## Version Compatibility
 
-| Version | Handler Signature | Cancellation | Notes |
-|---------|------------------|--------------|-------|
-| v0.2.x  | `(instr, next)` | ❌ Not supported | Resource leaks on interrupt |
-| v0.3.0  | `(instr, next, ctx)` | ✅ Automatic | BREAKING CHANGE |
+| Version | Handler Signature    | Cancellation     | Notes                       |
+| ------- | -------------------- | ---------------- | --------------------------- |
+| v0.2.x  | `(instr, next)`      | ❌ Not supported | Resource leaks on interrupt |
+| v0.3.0  | `(instr, next, ctx)` | ✅ Automatic     | BREAKING CHANGE             |
 
 ---
 

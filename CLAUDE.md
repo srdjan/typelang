@@ -186,7 +186,7 @@ All handlers now receive a third parameter `ctx: CancellationContext`:
 type HandlerFn = (
   instr: AnyInstr,
   next: Next,
-  ctx: CancellationContext  // NEW: Required third parameter
+  ctx: CancellationContext, // NEW: Required third parameter
 ) => unknown | Promise<unknown>;
 ```
 
@@ -194,8 +194,8 @@ type HandlerFn = (
 
 ```typescript
 type CancellationContext = {
-  readonly signal: AbortSignal;  // Check if cancelled: signal.aborted
-  readonly onCancel: (cleanup: () => void | Promise<void>) => void;  // Register cleanup
+  readonly signal: AbortSignal; // Check if cancelled: signal.aborted
+  readonly onCancel: (cleanup: () => void | Promise<void>) => void; // Register cleanup
 };
 ```
 
@@ -209,8 +209,8 @@ const httpHandler: Handler = {
       const [url] = instr.args;
       // Pass signal to fetch - automatic cancellation on Ctrl-C or parent abort
       return await fetch(url, { signal: ctx.signal });
-    }
-  }
+    },
+  },
 };
 ```
 
@@ -232,8 +232,8 @@ const fileHandler: Handler = {
 
       await file.write(new TextEncoder().encode(data));
       return file.rid;
-    }
-  }
+    },
+  },
 };
 ```
 
@@ -269,12 +269,12 @@ All custom handlers must add the `ctx` parameter:
 ```typescript
 // Before (v0.2.x)
 handles: {
-  myOp: (instr, next) => { /* ... */ }
+  myOp: ((instr, next) => {/* ... */});
 }
 
 // After (v0.3.0)
 handles: {
-  myOp: (instr, next, ctx) => { /* ... */ }
+  myOp: ((instr, next, ctx) => {/* ... */});
 }
 ```
 
