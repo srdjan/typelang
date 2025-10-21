@@ -21,6 +21,8 @@ import {
   withController,
 } from "./runtime.ts";
 import { AwaitedReturn, Capability, Combine, Eff, Instr, Pure } from "./types.ts";
+import { defineResource as defineResourceDescriptor, use as useResources } from "./resource.ts";
+import type { ResourceBlueprint, ResourceDescriptor, ResourceValues } from "./resource.ts";
 
 type EffectFn = (...args: any[]) => unknown;
 
@@ -30,6 +32,8 @@ type Ret<F> = F extends (...args: any[]) => infer R ? AwaitedReturn<R> : never;
 export type { Capability, Combine, Eff, Pure };
 export { builtInHandlers as handlers, resolveEff, stack };
 export type { Handler };
+export { defineResourceDescriptor as defineResource, useResources as use };
+export type { ResourceBlueprint, ResourceDescriptor, ResourceValues };
 
 // Effect constructor --------------------------------------------------------
 

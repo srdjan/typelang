@@ -1,7 +1,8 @@
 // typelang/runtime.ts
 // Effect handler runtime with composable handler stacks.
 
-import { AnyInstr, AwaitedReturn, CancellationContext } from "./types.ts";
+import type { ResourceDescriptor } from "./resource.ts";
+import { AnyInstr, AwaitedReturn, CancellationContext, Eff } from "./types.ts";
 
 type Halt = Readonly<{ type: typeof HALT; effect: string; value: unknown }>;
 
@@ -540,6 +541,60 @@ const httpDefault = (): Handler => ({
   },
 });
 
+type ResourceDescriptorMap = Readonly<
+  Record<string, ResourceDescriptor<unknown, unknown, unknown>>
+>;
+
+const resourceScoped = (): Handler => ({
+  name: "Resource",
+  handles: {
+    scope: (instr, next, ctx) => {
+      const [rawDescriptors, body] = instr.args as [
+        ResourceDescriptorMap,
+        (resources: Readonly<Record<string, unknown>>) => Eff<unknown, unknown>,
+      ];
+
+      return withChildScope(async () => {
+        const entries = Object.entries(rawDescriptors) as Array<
+          [string, ResourceDescriptor<unknown, unknown, unknown>]
+        >;
+        const resources: Record<string, unknown> = {};
+
+        for (const [key, descriptor] of entries) {
+          if (typeof descriptor.acquire !== "function") {
+            throw new Error(`Resource descriptor "${key}" is missing acquire()`);
+          }
+          if (typeof descriptor.release !== "function") {
+            throw new Error(`Resource descriptor "${key}" is missing release()`);
+          }
+
+          const value = await resolveEff(descriptor.acquire());
+          resources[key] = value;
+          const label = descriptor.label ?? key;
+
+          ctx.onCancel(async () => {
+            try {
+              await resolveEff(descriptor.release(value));
+            } catch (error) {
+              console.error(`[Resource] Cleanup error for "${label}":`, error);
+            }
+          });
+        }
+
+        const snapshot = Object.freeze({ ...resources });
+
+        // Skip body execution if the scope has already been canceled.
+        if (ctx.signal.aborted) {
+          return undefined;
+        }
+
+        const resultEff = body(snapshot);
+        return await resolveEff(resultEff);
+      });
+    },
+  },
+});
+
 export const handlers = {
   Console: {
     capture: consoleCapture,
@@ -556,5 +611,8 @@ export const handlers = {
   },
   Http: {
     default: httpDefault,
+  },
+  Resource: {
+    scope: resourceScoped,
   },
 } as const;

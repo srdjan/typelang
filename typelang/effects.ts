@@ -59,3 +59,12 @@ export interface HttpSpec {
 }
 
 export const Http = defineEffect<"Http", HttpSpec>("Http");
+
+export interface ResourceSpec {
+  scope(
+    descriptors: Readonly<Record<string, unknown>>,
+    body: (resources: Readonly<Record<string, unknown>>) => unknown,
+  ): unknown;
+}
+
+export const Resource = defineEffect<"Resource", ResourceSpec>("Resource");
