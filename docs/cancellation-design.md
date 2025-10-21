@@ -1,8 +1,6 @@
 # Automatic Cancellation & Disposal for typelang
 
-**Version:** 1.0
-**Date:** 2025-10-20
-**Status:** Design Proposal
+**Version:** 1.0 **Date:** 2025-10-20 **Status:** Design Proposal
 
 ---
 
@@ -32,21 +30,26 @@
 
 ### Problem Statement
 
-typelang's current effect system lacks automatic resource cleanup and cancellation mechanisms. Users must manually wire `AbortSignal` through effect chains, leading to:
+typelang's current effect system lacks automatic resource cleanup and cancellation mechanisms. Users
+must manually wire `AbortSignal` through effect chains, leading to:
 
 - **Boilerplate**: Manual signal threading through every async operation
-- **Resource leaks**: No automatic cleanup when operations are interrupted (Ctrl-C, exceptions, timeouts)
-- **Unsafe concurrency**: `par.race()` doesn't cancel losing branches, `par.all()` doesn't cancel siblings on failure
-- **Poor developer experience**: Users must think about cancellation explicitly instead of getting it automatically
+- **Resource leaks**: No automatic cleanup when operations are interrupted (Ctrl-C, exceptions,
+  timeouts)
+- **Unsafe concurrency**: `par.race()` doesn't cancel losing branches, `par.all()` doesn't cancel
+  siblings on failure
+- **Poor developer experience**: Users must think about cancellation explicitly instead of getting
+  it automatically
 
 **Current state (problematic):**
+
 ```typescript
 // User must manually thread AbortController
 const controller = new AbortController();
 
 const fetchUser = (id: string, signal: AbortSignal) =>
   seq()
-    .let(() => Http.op.get(`/users/${id}`, signal))  // ← Manual signal passing
+    .let(() => Http.op.get(`/users/${id}`, signal)) // ← Manual signal passing
     .then((res) => res.json())
     .value();
 
@@ -65,11 +68,12 @@ Inspired by **Effection's automatic disposal mechanism**, this design proposes:
 5. **LIFO cleanup order** - Cleanup callbacks run in reverse order of registration
 
 **Desired state (after implementation):**
+
 ```typescript
 // No AbortSignal, no manual wiring
 const fetchUser = (id: string) =>
   seq()
-    .let(() => Http.op.get(`/users/${id}`))  // ← Clean API
+    .let(() => Http.op.get(`/users/${id}`)) // ← Clean API
     .then((res) => res.json())
     .value();
 
@@ -79,12 +83,12 @@ await stack(httpHandler()).run(() => fetchUser("123"));
 
 ### Key Design Decisions
 
-| Decision | Choice | Rationale |
-|----------|--------|-----------|
-| **Expose AbortSignal to users?** | **No** - Hidden in runtime | Matches Effection's philosophy; cleaner API |
-| **Handler signature change?** | **Breaking change** - Add required `ctx` param | Clean break enables better future evolution |
-| **Cleanup order?** | **LIFO** (stack-based) | Matches resource acquisition order |
-| **External cancellation API?** | **No** - Purely automatic | Keeps API surface minimal |
+| Decision                         | Choice                                         | Rationale                                   |
+| -------------------------------- | ---------------------------------------------- | ------------------------------------------- |
+| **Expose AbortSignal to users?** | **No** - Hidden in runtime                     | Matches Effection's philosophy; cleaner API |
+| **Handler signature change?**    | **Breaking change** - Add required `ctx` param | Clean break enables better future evolution |
+| **Cleanup order?**               | **LIFO** (stack-based)                         | Matches resource acquisition order          |
+| **External cancellation API?**   | **No** - Purely automatic                      | Keeps API surface minimal                   |
 
 ---
 
@@ -101,12 +105,14 @@ Modern applications perform async operations (HTTP, timers, file I/O) that may n
 5. **Resource cleanup** - File handles, network connections, timers must be released
 
 **Without automatic cancellation:**
+
 - Resources leak (timers keep running, connections stay open)
 - Ctrl-C leaves processes in inconsistent state
 - Race operations waste CPU on losing branches
 - Manual signal wiring creates boilerplate and bugs
 
 **With automatic cancellation:**
+
 - Resources cleaned up deterministically
 - Ctrl-C triggers graceful shutdown
 - Race automatically cancels losers
@@ -116,7 +122,8 @@ Modern applications perform async operations (HTTP, timers, file I/O) that may n
 
 #### 1. No Cleanup Mechanism
 
-Handlers have `finalize()` but it only runs **after** the program completes successfully or fails. There's no way to interrupt in-flight operations:
+Handlers have `finalize()` but it only runs **after** the program completes successfully or fails.
+There's no way to interrupt in-flight operations:
 
 ```typescript
 // Current: timer keeps running even if program is interrupted
@@ -125,35 +132,38 @@ const asyncHandler = (): Handler => ({
   handles: {
     sleep: (instr, next) => {
       const [ms] = instr.args;
-      setTimeout(() => next(), ms);  // ← No way to cancel this timer
-    }
-  }
+      setTimeout(() => next(), ms); // ← No way to cancel this timer
+    },
+  },
 });
 ```
 
 #### 2. Unsafe Parallel Combinators
 
 `par.race()` doesn't cancel losing branches:
+
 ```typescript
 // Losing branch keeps running, wasting resources
 par.race([
-  () => Http.op.get("/fast"),   // Completes in 10ms
-  () => Http.op.get("/slow"),   // ← Still runs for 5 seconds!
-])
+  () => Http.op.get("/fast"), // Completes in 10ms
+  () => Http.op.get("/slow"), // ← Still runs for 5 seconds!
+]);
 ```
 
 `par.all()` doesn't cancel siblings on failure:
+
 ```typescript
 // If users fails, posts keeps running
 par.all({
-  users: () => Http.op.get("/users"),  // ← Fails immediately
-  posts: () => Http.op.get("/posts"),  // ← Wastes 10 seconds
-})
+  users: () => Http.op.get("/users"), // ← Fails immediately
+  posts: () => Http.op.get("/posts"), // ← Wastes 10 seconds
+});
 ```
 
 #### 3. No Signal Handling
 
 Ctrl-C during an HTTP request leaves the connection open:
+
 ```typescript
 // User hits Ctrl-C, fetch keeps running
 await stack(httpHandler()).run(() => Http.op.get("http://slow-api.com/data"));
@@ -170,44 +180,53 @@ await stack(httpHandler()).run(() => Http.op.get("http://slow-api.com/data"));
 
 #### 1. Automatic Disposal via Operation Encoding
 
-**Key Quote:** "Every Effection operation contains the information on how to dispose of itself, and so the actual act of cancellation can be automated."
+**Key Quote:** "Every Effection operation contains the information on how to dispose of itself, and
+so the actual act of cancellation can be automated."
 
 Effection operations use **try/finally patterns** to encode cleanup:
+
 ```typescript
 // Effection pattern (simplified)
 function* createWebSocket(url) {
   const socket = new WebSocket(url);
   try {
-    yield* provide(socket);  // Suspends until caller completes
+    yield* provide(socket); // Suspends until caller completes
   } finally {
-    socket.close();  // Cleanup runs automatically
+    socket.close(); // Cleanup runs automatically
     yield* until(() => socket.onclose);
   }
 }
 ```
 
-**Insight for typelang:** Handlers should register cleanup callbacks that the runtime executes automatically.
+**Insight for typelang:** Handlers should register cleanup callbacks that the runtime executes
+automatically.
 
 #### 2. Scope-Based Lifecycle Coupling
 
 Resources are tied to caller lifecycle via **parent-child scope relationships**:
+
 - Child task created with `owner: caller.scope`
 - When caller completes, child scope closes
 - Finally blocks execute during scope closure
 
-**Insight for typelang:** Runtime should track active operations and propagate cancellation through the handler stack.
+**Insight for typelang:** Runtime should track active operations and propagate cancellation through
+the handler stack.
 
 #### 3. Signal-Free API
 
 Users never see or wire signals. The framework intercepts SIGINT/SIGTERM:
 
-**Key Quote:** "If you run the above code in NodeJS and hit CTRL-C while the request is still in progress, it will properly cancel the in-flight request as a well-behaved HTTP client should, all without you ever having to think about it."
+**Key Quote:** "If you run the above code in NodeJS and hit CTRL-C while the request is still in
+progress, it will properly cancel the in-flight request as a well-behaved HTTP client should, all
+without you ever having to think about it."
 
-**Insight for typelang:** `stack().run()` should install signal handlers automatically and trigger cleanup on interrupt.
+**Insight for typelang:** `stack().run()` should install signal handlers automatically and trigger
+cleanup on interrupt.
 
 #### 4. Structured Concurrency
 
 Cancellation propagates through composition:
+
 - `race()` cancels losing branches
 - `all()` cancels siblings on first failure
 - Parent cancellation cascades to children
@@ -225,6 +244,7 @@ From source code analysis:
 5. **Parent-child propagation** - Error boundaries and scopes cascade cancellation
 
 **Key Pattern:**
+
 ```typescript
 // Simplified Effection task pattern
 const task = createTask(owner, operation);
@@ -232,7 +252,7 @@ group.add(task);
 try {
   return await execute(operation);
 } finally {
-  group.delete(task);  // Cleanup on any exit path
+  group.delete(task); // Cleanup on any exit path
 }
 ```
 
@@ -303,13 +323,13 @@ try {
 
 ### Component Responsibilities
 
-| Component | Responsibility | Cancellation Role |
-|-----------|----------------|-------------------|
-| **User Code** | Define effects, compose programs | None - transparent |
-| **Runtime** | Manage AbortController, cleanup stack, signals | Create/trigger cancellation |
-| **Handlers** | Register cleanup, use ctx.signal | Respond to cancellation |
-| **Combinators** | Propagate cancellation to children | Coordinate multi-branch cancel |
-| **Side Effects** | Accept AbortSignal, respond to abort | Execute actual cleanup |
+| Component        | Responsibility                                 | Cancellation Role              |
+| ---------------- | ---------------------------------------------- | ------------------------------ |
+| **User Code**    | Define effects, compose programs               | None - transparent             |
+| **Runtime**      | Manage AbortController, cleanup stack, signals | Create/trigger cancellation    |
+| **Handlers**     | Register cleanup, use ctx.signal               | Respond to cancellation        |
+| **Combinators**  | Propagate cancellation to children             | Coordinate multi-branch cancel |
+| **Side Effects** | Accept AbortSignal, respond to abort           | Execute actual cleanup         |
 
 ---
 
@@ -352,7 +372,7 @@ type Next = (override?: AnyInstr) => Promise<unknown>;
 type HandlerFn = (
   instr: AnyInstr,
   next: Next,
-  ctx: CancellationContext  // ← NEW: Required third parameter
+  ctx: CancellationContext, // ← NEW: Required third parameter
 ) => unknown | Promise<unknown>;
 
 export type Handler = Readonly<{
@@ -371,7 +391,7 @@ export type Eff<A, Caps> = A & { readonly __eff?: (e: Caps) => Caps };
 
 // Effect definitions UNCHANGED - no signal parameters
 const Http = defineEffect<"Http", {
-  get: (url: string) => Response;  // ← No signal parameter
+  get: (url: string) => Response; // ← No signal parameter
   post: (url: string, body: unknown) => Response;
 }>("Http");
 ```
@@ -386,8 +406,8 @@ const Http = defineEffect<"Http", {
 type RuntimeInstance = Readonly<{
   handlers: readonly Handler[];
   dispatch: Dispatch;
-  controllerStack: AbortController[];    // ← NEW: Stack of scoped controllers
-  cleanupStacks: Map<AbortController, Array<() => void | Promise<void>>>;  // ← NEW: Per-scope cleanup stacks
+  controllerStack: AbortController[]; // ← NEW: Stack of scoped controllers
+  cleanupStacks: Map<AbortController, Array<() => void | Promise<void>>>; // ← NEW: Per-scope cleanup stacks
 }>;
 
 // Helper to get current (topmost) controller
@@ -411,13 +431,13 @@ const getCurrentCleanups = (runtime: RuntimeInstance): Array<() => void | Promis
 ```typescript
 export const stack = (...handlers: readonly Handler[]) => ({
   run: async <A>(thunk: () => A): Promise<A> => {
-    const rootController = new AbortController();  // ← NEW: Root controller
+    const rootController = new AbortController(); // ← NEW: Root controller
     const runtime = createRuntime(handlers, rootController);
 
     // NEW: Install signal handlers
     const signalHandler = () => {
       console.log("\nReceived interrupt signal, cleaning up...");
-      rootController.abort();  // Abort root (propagates to all children)
+      rootController.abort(); // Abort root (propagates to all children)
     };
     Deno.addSignalListener("SIGINT", signalHandler);
     Deno.addSignalListener("SIGTERM", signalHandler);
@@ -477,7 +497,7 @@ const runCleanups = async (
   const cleanups = runtime.cleanupStacks.get(controller);
   if (!cleanups || cleanups.length === 0) return;
 
-  const reversed = [...cleanups].reverse();  // LIFO order
+  const reversed = [...cleanups].reverse(); // LIFO order
 
   for (const cleanup of reversed) {
     try {
@@ -514,7 +534,7 @@ const createCancellationContext = (runtime: RuntimeInstance): CancellationContex
   const cleanups = getCurrentCleanups(runtime);
 
   return {
-    signal: controller.signal,  // ← Returns current scope's signal
+    signal: controller.signal, // ← Returns current scope's signal
 
     onCancel: (cleanup) => {
       // Register cleanup in current scope's LIFO stack
@@ -538,7 +558,7 @@ const createRuntime = (
   handlers: readonly Handler[],
   rootController: AbortController,
 ): RuntimeInstance => {
-  const controllerStack = [rootController];  // Initialize with root controller
+  const controllerStack = [rootController]; // Initialize with root controller
   const cleanupStacks = new Map<AbortController, Array<() => void | Promise<void>>>();
 
   const runHandler = (index: number, instr: AnyInstr): unknown | Promise<unknown> => {
@@ -546,9 +566,9 @@ const createRuntime = (
       const availableHandlers = handlers.map((h) => h.name).join(", ");
       throw new Error(
         `Unhandled effect ${instr._tag}.${instr.kind}\n` +
-        `Available handlers: [${availableHandlers}]\n` +
-        `Missing handler for: ${instr._tag}\n` +
-        `Hint: Add handlers.${instr._tag}.<variant>() to your stack`,
+          `Available handlers: [${availableHandlers}]\n` +
+          `Missing handler for: ${instr._tag}\n` +
+          `Hint: Add handlers.${instr._tag}.<variant>() to your stack`,
       );
     }
 
@@ -594,7 +614,11 @@ const createRuntime = (
 type HandlerFn = (instr: AnyInstr, next: Next) => unknown | Promise<unknown>;
 
 // NEW (v0.3.x)
-type HandlerFn = (instr: AnyInstr, next: Next, ctx: CancellationContext) => unknown | Promise<unknown>;
+type HandlerFn = (
+  instr: AnyInstr,
+  next: Next,
+  ctx: CancellationContext,
+) => unknown | Promise<unknown>;
 ```
 
 ### Using ctx in Handlers
@@ -645,7 +669,7 @@ const handler = (): Handler => ({
 const handler = (): Handler => ({
   name: "Console",
   handles: {
-    log: (instr, next, ctx) => {  // ctx present but unused
+    log: (instr, next, ctx) => { // ctx present but unused
       const [message] = instr.args;
       console.log(message);
       return next();
@@ -663,6 +687,7 @@ const handler = (): Handler => ({
 #### sleep() - Cancelable Timers
 
 **Current implementation (no cancellation):**
+
 ```typescript
 const asyncDefault = (): Handler => ({
   name: "Async",
@@ -670,7 +695,7 @@ const asyncDefault = (): Handler => ({
     sleep: (instr, next) => {
       const [ms] = instr.args;
       return new Promise((resolve) => {
-        setTimeout(resolve, ms);  // ← Can't cancel
+        setTimeout(resolve, ms); // ← Can't cancel
       });
     },
   },
@@ -678,11 +703,12 @@ const asyncDefault = (): Handler => ({
 ```
 
 **New implementation (with cancellation):**
+
 ```typescript
 const asyncDefault = (): Handler => ({
   name: "Async",
   handles: {
-    sleep: (instr, next, ctx) => {  // ← ctx added
+    sleep: (instr, next, ctx) => { // ← ctx added
       const [ms] = instr.args;
 
       return new Promise((resolve, reject) => {
@@ -696,21 +722,23 @@ const asyncDefault = (): Handler => ({
       });
     },
 
-    await: async (instr, next, ctx) => {  // ← ctx added (unused here)
+    await: async (instr, next, ctx) => { // ← ctx added (unused here)
       const [promise] = instr.args;
-      return await promise;  // Promise already cancelable via AbortController if passed
+      return await promise; // Promise already cancelable via AbortController if passed
     },
   },
 });
 ```
 
 **User-facing API (unchanged):**
+
 ```typescript
 // User code - no signal parameter
 await Async.op.sleep(1000);
 ```
 
 **Behavior:**
+
 - Ctrl-C during sleep cancels timer and rejects promise
 - Cleanup callback clears timeout to prevent memory leak
 - Error message indicates cancellation (vs. normal completion)
@@ -734,6 +762,7 @@ export const Http = defineEffect<"Http", HttpSpec>("Http");
 ```
 
 **User-facing API:**
+
 ```typescript
 // Clean API - no signal parameter
 const response = await Http.op.get("https://api.example.com/users");
@@ -752,7 +781,7 @@ const httpDefault = (): Handler => ({
 
       // Pass ctx.signal to fetch - automatic cancellation
       const response = await fetch(url, {
-        signal: ctx.signal,  // ← Abort on cancellation
+        signal: ctx.signal, // ← Abort on cancellation
       });
 
       return response;
@@ -765,7 +794,7 @@ const httpDefault = (): Handler => ({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
-        signal: ctx.signal,  // ← Abort on cancellation
+        signal: ctx.signal, // ← Abort on cancellation
       });
 
       return response;
@@ -803,11 +832,12 @@ export const handlers = {
   Exception: { tryCatch: exceptionTryCatch },
   State: { with: stateWith },
   Async: { default: asyncDefault },
-  Http: { default: httpDefault },  // ← NEW
+  Http: { default: httpDefault }, // ← NEW
 } as const;
 ```
 
 **Behavior:**
+
 - Ctrl-C during fetch aborts request via native AbortSignal
 - Connection closed gracefully by browser/Deno runtime
 - Fetch throws `AbortError` which propagates through effect stack
@@ -818,6 +848,7 @@ export const handlers = {
 ### Console Effect
 
 **Current implementation:**
+
 ```typescript
 const consoleLive = (sink: ConsoleRecord = console): Handler => ({
   name: "Console",
@@ -831,11 +862,12 @@ const consoleLive = (sink: ConsoleRecord = console): Handler => ({
 ```
 
 **New implementation (ctx added but unused):**
+
 ```typescript
 const consoleLive = (sink: ConsoleRecord = console): Handler => ({
   name: "Console",
   handles: {
-    log: (instr, next, ctx) => {  // ← ctx added for signature compatibility
+    log: (instr, next, ctx) => { // ← ctx added for signature compatibility
       sink.log?.(...instr.args);
       return next();
     },
@@ -851,13 +883,15 @@ const consoleLive = (sink: ConsoleRecord = console): Handler => ({
 });
 ```
 
-**Rationale:** Console operations are synchronous and don't need cancellation, but must accept `ctx` for type compatibility.
+**Rationale:** Console operations are synchronous and don't need cancellation, but must accept `ctx`
+for type compatibility.
 
 ---
 
 ### State Effect
 
 **Current implementation:**
+
 ```typescript
 const stateWith = <S>(initial: S): Handler => {
   let state = initial;
@@ -883,13 +917,14 @@ const stateWith = <S>(initial: S): Handler => {
 ```
 
 **New implementation (ctx added but unused):**
+
 ```typescript
 const stateWith = <S>(initial: S): Handler => {
   let state = initial;
   return {
     name: "State",
     handles: {
-      get: (instr, next, ctx) => state,  // ← ctx added
+      get: (instr, next, ctx) => state, // ← ctx added
       put: (instr, next, ctx) => {
         const [next] = instr.args as [S];
         state = next;
@@ -914,6 +949,7 @@ const stateWith = <S>(initial: S): Handler => {
 ### Exception Effect
 
 **Current implementation:**
+
 ```typescript
 const exceptionTryCatch = (): Handler => {
   let failure: unknown = null;
@@ -940,13 +976,14 @@ const exceptionTryCatch = (): Handler => {
 ```
 
 **New implementation (ctx added, used for abort on fail):**
+
 ```typescript
 const exceptionTryCatch = (): Handler => {
   let failure: unknown = null;
   return {
     name: "Exception",
     handles: {
-      fail: (instr, next, ctx) => {  // ← ctx added
+      fail: (instr, next, ctx) => { // ← ctx added
         const [error] = instr.args;
         failure = error;
 
@@ -979,14 +1016,18 @@ const exceptionTryCatch = (): Handler => {
 
 ### Problem Statement
 
-The proposed cancellation mechanism requires combinators (`par.all`, `par.race`, etc. in `typelang/mod.ts`) to access the current runtime's `AbortController` to create properly-linked child controllers. However, `runtimeStack` is a **private module variable** in `typelang/runtime.ts`, creating an architectural conflict:
+The proposed cancellation mechanism requires combinators (`par.all`, `par.race`, etc. in
+`typelang/mod.ts`) to access the current runtime's `AbortController` to create properly-linked child
+controllers. However, `runtimeStack` is a **private module variable** in `typelang/runtime.ts`,
+creating an architectural conflict:
 
 **Current clean boundary:**
+
 ```typescript
 // typelang/runtime.ts
-const runtimeStack: RuntimeInstance[] = [];  // ← Private, not exported
+const runtimeStack: RuntimeInstance[] = []; // ← Private, not exported
 
-export { resolveEff, stack, handlers };  // ← Clean public API
+export { handlers, resolveEff, stack }; // ← Clean public API
 ```
 
 ```typescript
@@ -1002,6 +1043,7 @@ export const par = {
 ```
 
 **Problematic approach (shown in sections below):**
+
 ```typescript
 // typelang/mod.ts
 export const par = {
@@ -1014,9 +1056,11 @@ export const par = {
 
 ### Solution: Export Cancellation Helper Functions
 
-Instead of exposing `runtimeStack`, **export helper functions** from `runtime.ts` that encapsulate controller management:
+Instead of exposing `runtimeStack`, **export helper functions** from `runtime.ts` that encapsulate
+controller management:
 
 **New runtime.ts exports:**
+
 ```typescript
 // typelang/runtime.ts
 
@@ -1153,17 +1197,18 @@ export const withController = async <T>(
 ```
 
 **Updated mod.ts imports:**
+
 ```typescript
 // typelang/mod.ts
 import {
+  getCurrentScopeController,
   resolveEff,
   stack,
   withChildScope,
   withController,
-  getCurrentScopeController,
 } from "./runtime.ts";
 
-export { stack };  // Re-export public API
+export { stack }; // Re-export public API
 
 // Note: pushControllerScope/popControllerScope not imported directly
 // Use withChildScope (always runs cleanup) or withController (conditional cleanup)
@@ -1171,16 +1216,16 @@ export { stack };  // Re-export public API
 
 ### Benefits of This Approach
 
-✅ **Encapsulation preserved** - `runtimeStack` and `controllerStack` remain private
-✅ **Explicit scope management** - Push/pop pattern is clear and verifiable
-✅ **Type-safe** - Functions throw outside runtime context
-✅ **Testable** - Helper functions can be unit tested independently
-✅ **Automatic cleanup** - `withChildScope` ensures cleanup runs
-✅ **Future-proof** - Can change internal runtime representation
+✅ **Encapsulation preserved** - `runtimeStack` and `controllerStack` remain private ✅ **Explicit
+scope management** - Push/pop pattern is clear and verifiable ✅ **Type-safe** - Functions throw
+outside runtime context ✅ **Testable** - Helper functions can be unit tested independently ✅
+**Automatic cleanup** - `withChildScope` ensures cleanup runs ✅ **Future-proof** - Can change
+internal runtime representation
 
 ### Critical: Scope Stack Integrity
 
 The controller stack must maintain integrity:
+
 1. **Push before entering scope** - `pushControllerScope()` at combinator entry
 2. **Pop after exiting scope** - `popControllerScope()` in finally block (or use `withChildScope`)
 3. **Never orphan scopes** - Every push must have matching pop
@@ -1190,7 +1235,8 @@ The controller stack must maintain integrity:
 
 **Problem:** Shared scopes cause cleanup for successful operations.
 
-If multiple concurrent operations share a scope, aborting the scope runs cleanup for ALL operations, including ones that completed successfully:
+If multiple concurrent operations share a scope, aborting the scope runs cleanup for ALL operations,
+including ones that completed successfully:
 
 ```typescript
 // ❌ BROKEN: Shared scope
@@ -1198,11 +1244,11 @@ withChildScope(async () => {
   const controller = getCurrentScopeController()!;
 
   const [branchA, branchB] = await Promise.all([
-    Http.op.get("/fast"),  // Completes successfully
-    Http.op.get("/slow"),  // Still running
+    Http.op.get("/fast"), // Completes successfully
+    Http.op.get("/slow"), // Still running
   ]);
 
-  controller.abort();  // Abort to cancel branchB
+  controller.abort(); // Abort to cancel branchB
   // ← Scope pop runs cleanup for BOTH A and B!
   // ← Branch A's cleanup runs even though it succeeded!
 });
@@ -1219,12 +1265,13 @@ const [resultA, resultB] = await Promise.all([
   withController(branchControllers[1], () => Http.op.get("/slow")),
 ]);
 
-branchControllers[1].abort();  // Only aborted branch runs cleanup ✓
+branchControllers[1].abort(); // Only aborted branch runs cleanup ✓
 ```
 
 **Key:** `withController` only runs cleanup if `controller.signal.aborted === true`.
 
 **Flow diagram:**
+
 ```
 stack().run() starts
 ├─ controllerStack = [rootController]
@@ -1280,7 +1327,9 @@ export const par = {
 };
 ```
 
-**Key insight:** Because handlers call `createCancellationContext` which returns the **top of the controller stack**, handlers executing within `par.race` branches automatically receive the child controller's signal, not the root controller's signal.
+**Key insight:** Because handlers call `createCancellationContext` which returns the **top of the
+controller stack**, handlers executing within `par.race` branches automatically receive the child
+controller's signal, not the root controller's signal.
 
 ---
 
@@ -1289,6 +1338,7 @@ export const par = {
 ### par.all() - Cancel All on First Failure
 
 **Current implementation (no cancellation):**
+
 ```typescript
 export const par = {
   all<T extends Record<string, () => Eff<unknown, unknown>>>(tasks: T) {
@@ -1315,6 +1365,7 @@ const mapEntries = async (
 **Problem:** If one task fails, others keep running.
 
 **New implementation (with per-branch scopes to avoid cleanup on success):**
+
 ```typescript
 export const par = {
   all<T extends Record<string, () => Eff<unknown, unknown>>>(tasks: T) {
@@ -1365,16 +1416,18 @@ export const par = {
 };
 ```
 
-**Key difference from race:** If all branches succeed, none are aborted, so no cleanup runs (correct).
-If one branch fails, all are aborted, so all run cleanup (also correct - failure is cancellation).
+**Key difference from race:** If all branches succeed, none are aborted, so no cleanup runs
+(correct). If one branch fails, all are aborted, so all run cleanup (also correct - failure is
+cancellation).
 
 **Behavior:**
+
 ```typescript
 // If users fails, posts is automatically canceled
 par.all({
-  users: () => Http.op.get("/users"),  // ← Fails after 100ms
-  posts: () => Http.op.get("/posts"),  // ← Aborted immediately
-})
+  users: () => Http.op.get("/users"), // ← Fails after 100ms
+  posts: () => Http.op.get("/posts"), // ← Aborted immediately
+});
 ```
 
 ---
@@ -1382,6 +1435,7 @@ par.all({
 ### par.race() - Cancel Losers
 
 **Current implementation (no cancellation):**
+
 ```typescript
 race<T, E>(thunks: readonly (() => Eff<T, E>)[]) {
   return resolveEff(Promise.race(thunks.map((t) => resolveEff(t())))) as unknown as Eff<
@@ -1394,6 +1448,7 @@ race<T, E>(thunks: readonly (() => Eff<T, E>)[]) {
 **Problem:** Losing branches keep running.
 
 **New implementation (with cancellation and per-branch scopes):**
+
 ```typescript
 race<T, E>(thunks: readonly (() => Eff<T, E>)[]) {
   return resolveEff(
@@ -1436,6 +1491,7 @@ race<T, E>(thunks: readonly (() => Eff<T, E>)[]) {
 **Problem with above approach:** Winner's scope completes before we can abort losers!
 
 **Correct approach - per-branch scopes with conditional cleanup:**
+
 ```typescript
 race<T, E>(thunks: readonly (() => Eff<T, E>)[]) {
   return resolveEff(
@@ -1487,10 +1543,10 @@ race<T, E>(thunks: readonly (() => Eff<T, E>)[]) {
 }
 ```
 
-**Key fix:** `withController` runs cleanup ONLY if `controller.signal.aborted === true`.
-Winner's branch completes without abort, so its cleanup never runs ✓
-```
+**Key fix:** `withController` runs cleanup ONLY if `controller.signal.aborted === true`. Winner's
+branch completes without abort, so its cleanup never runs ✓
 
+````
 **Behavior:**
 ```typescript
 // When /fast completes, /slow is automatically canceled
@@ -1498,13 +1554,14 @@ par.race([
   () => Http.op.get("/fast"),  // ← Completes in 10ms
   () => Http.op.get("/slow"),  // ← Aborted after 10ms
 ])
-```
+````
 
 ---
 
 ### par.map() - Cancel All on First Failure
 
 **Current implementation:**
+
 ```typescript
 map<T, U, E>(xs: readonly T[], f: (value: T) => Eff<U, E>) {
   return resolveEff(
@@ -1514,6 +1571,7 @@ map<T, U, E>(xs: readonly T[], f: (value: T) => Eff<U, E>) {
 ```
 
 **New implementation (per-item scopes for correct cleanup):**
+
 ```typescript
 map<T, U, E>(xs: readonly T[], f: (value: T) => Eff<U, E>) {
   return resolveEff(
@@ -1559,6 +1617,7 @@ map<T, U, E>(xs: readonly T[], f: (value: T) => Eff<U, E>) {
 ### seq() - Propagate to Current Step
 
 **Current implementation:**
+
 ```typescript
 export function seq() {
   return buildSeq<{}, void>([]);
@@ -1576,19 +1635,20 @@ const buildSeq = <C, Last>(steps: readonly StepFn[]): SeqBuilder<C, Last> => ({
 });
 ```
 
-**New implementation (cancellation propagates automatically):**
-No changes needed! Since `resolveEff` uses the current runtime's `AbortController`, cancellation propagates automatically:
+**New implementation (cancellation propagates automatically):** No changes needed! Since
+`resolveEff` uses the current runtime's `AbortController`, cancellation propagates automatically:
 
 ```typescript
 // If Ctrl-C during step 2, step 3 never runs
 seq()
-  .let(() => step1())       // ← Completes
-  .then(() => step2())      // ← Ctrl-C here
-  .then(() => step3())      // ← Never executed
-  .value()
+  .let(() => step1()) // ← Completes
+  .then(() => step2()) // ← Ctrl-C here
+  .then(() => step3()) // ← Never executed
+  .value();
 ```
 
 **Behavior:**
+
 - AbortController abort triggers during any step
 - Current step's handler receives aborted `ctx.signal`
 - Subsequent steps never execute (runtime stops dispatching)
@@ -1601,6 +1661,7 @@ seq()
 ### SIGINT (Ctrl-C)
 
 **Installation:**
+
 ```typescript
 export const stack = (...handlers: readonly Handler[]) => ({
   run: async <A>(thunk: () => A): Promise<A> => {
@@ -1625,6 +1686,7 @@ export const stack = (...handlers: readonly Handler[]) => ({
 ```
 
 **Behavior:**
+
 1. User presses Ctrl-C
 2. `sigintHandler` called by Deno runtime
 3. `controller.abort()` triggers AbortSignal
@@ -1637,6 +1699,7 @@ export const stack = (...handlers: readonly Handler[]) => ({
 ### SIGTERM (Graceful Shutdown)
 
 **Installation:**
+
 ```typescript
 const sigtermHandler = () => {
   console.log("\n⚠️  Received SIGTERM, shutting down gracefully...");
@@ -1645,7 +1708,8 @@ const sigtermHandler = () => {
 Deno.addSignalListener("SIGTERM", sigtermHandler);
 ```
 
-**Behavior:** Same as SIGINT, but typically sent by process managers (systemd, Docker) instead of user.
+**Behavior:** Same as SIGINT, but typically sent by process managers (systemd, Docker) instead of
+user.
 
 ---
 
@@ -1658,7 +1722,7 @@ Deno.addSignalListener("SIGTERM", sigtermHandler);
 ```typescript
 const runCleanups = async (
   runtime: RuntimeInstance,
-  timeoutMs: number = 5000,  // 5 second default
+  timeoutMs: number = 5000, // 5 second default
 ): Promise<void> => {
   const cleanups = [...runtime.cleanups].reverse();
 
@@ -1685,6 +1749,7 @@ const runCleanups = async (
 ```
 
 **Configuration (future enhancement):**
+
 ```typescript
 // Allow users to configure timeout
 await stack(...handlers).run(program, { cleanupTimeoutMs: 10000 });
@@ -1696,18 +1761,19 @@ await stack(...handlers).run(program, { cleanupTimeoutMs: 10000 });
 
 ### Breaking Changes Summary
 
-| Component | Change | Impact |
-|-----------|--------|--------|
+| Component               | Change                                   | Impact                          |
+| ----------------------- | ---------------------------------------- | ------------------------------- |
 | **HandlerFn signature** | Add `ctx: CancellationContext` parameter | ALL custom handlers must update |
-| **Built-in handlers** | Updated to accept `ctx` | Automatic if using `handlers.*` |
-| **Runtime API** | Signal handling added | Transparent to users |
-| **Combinators** | Cancellation propagation added | Transparent to users |
+| **Built-in handlers**   | Updated to accept `ctx`                  | Automatic if using `handlers.*` |
+| **Runtime API**         | Signal handling added                    | Transparent to users            |
+| **Combinators**         | Cancellation propagation added           | Transparent to users            |
 
 ### Migration Steps
 
 #### Step 1: Update Custom Handlers
 
 **Before:**
+
 ```typescript
 const myHandler = (): Handler => ({
   name: "MyEffect",
@@ -1720,11 +1786,12 @@ const myHandler = (): Handler => ({
 ```
 
 **After:**
+
 ```typescript
 const myHandler = (): Handler => ({
   name: "MyEffect",
   handles: {
-    doThing: (instr, next, ctx) => {  // ← Add ctx parameter
+    doThing: (instr, next, ctx) => { // ← Add ctx parameter
       // Implementation (optionally use ctx.signal or ctx.onCancel)
     },
   },
@@ -1734,73 +1801,78 @@ const myHandler = (): Handler => ({
 #### Step 2: Add Cancellation Where Needed
 
 **For async operations (timers):**
+
 ```typescript
 // Before
-sleep: (instr, next) => {
+sleep: ((instr, next) => {
   const [ms] = instr.args;
   return new Promise((resolve) => setTimeout(resolve, ms));
-}
+});
 
 // After
-sleep: (instr, next, ctx) => {
+sleep: ((instr, next, ctx) => {
   const [ms] = instr.args;
   return new Promise((resolve) => {
     const timerId = setTimeout(resolve, ms);
-    ctx.onCancel(() => clearTimeout(timerId));  // ← Add cleanup
+    ctx.onCancel(() => clearTimeout(timerId)); // ← Add cleanup
   });
-}
+});
 ```
 
 **For network operations:**
+
 ```typescript
 // Before
-get: async (instr, next) => {
+get: (async (instr, next) => {
   const [url] = instr.args;
   return await fetch(url);
-}
+});
 
 // After
-get: async (instr, next, ctx) => {
+get: (async (instr, next, ctx) => {
   const [url] = instr.args;
-  return await fetch(url, { signal: ctx.signal });  // ← Pass signal
-}
+  return await fetch(url, { signal: ctx.signal }); // ← Pass signal
+});
 ```
 
 **For synchronous operations:**
+
 ```typescript
 // Before
-log: (instr, next) => {
+log: ((instr, next) => {
   console.log(...instr.args);
   return next();
-}
+});
 
 // After (just add ctx, don't use it)
-log: (instr, next, ctx) => {
+log: ((instr, next, ctx) => {
   console.log(...instr.args);
   return next();
-}
+});
 ```
 
 #### Step 3: Test Cancellation Scenarios
 
 **Test Ctrl-C:**
+
 ```typescript
 // Run a long-running program and press Ctrl-C
 await stack(handlers.Async.default()).run(() =>
   seq()
     .do(() => Console.op.log("Starting long sleep..."))
-    .do(() => Async.op.sleep(60000))  // 60 seconds
+    .do(() => Async.op.sleep(60000)) // 60 seconds
     .return(() => "Done")
 );
 // Press Ctrl-C during sleep - should cancel and exit gracefully
 ```
 
 **Test par.race:**
+
 ```typescript
 const result = await stack(handlers.Http.default()).run(() =>
   par.race([
-    () => Http.op.get("https://httpbin.org/delay/10"),  // 10 second delay
-    () => Http.op.get("https://httpbin.org/delay/1"),   // 1 second delay
+    () => Http.op.get("https://httpbin.org/delay/10"), // 10 second delay
+    () => Http.op.get("https://httpbin.org/delay/1"), // 1 second delay
   ])
 );
 // Verify first request completes, second is canceled
@@ -1809,6 +1881,7 @@ const result = await stack(handlers.Http.default()).run(() =>
 #### Step 4: Update Documentation
 
 Update project documentation to reflect:
+
 - Handler signature change
 - Cancellation behavior
 - Best practices for cleanup registration
@@ -1820,6 +1893,7 @@ Update project documentation to reflect:
 **Decision: NO backward compatibility** (clean break for v0.x)
 
 **Rationale:**
+
 1. Project is pre-1.0 (currently v0.2.x)
 2. Clean break enables better long-term API
 3. Migration is mechanical (add `ctx` parameter)
@@ -1828,7 +1902,8 @@ Update project documentation to reflect:
 **Version bump:** v0.2.x → v0.3.0 (breaking change)
 
 **Release notes template:**
-```markdown
+
+````markdown
 ## v0.3.0 - Automatic Cancellation & Disposal
 
 **BREAKING CHANGES:**
@@ -1838,6 +1913,7 @@ Update project documentation to reflect:
 - Built-in handlers (Console, State, Exception, Async) have been updated
 
 **Migration:**
+
 1. Add `ctx` parameter to all custom handler functions
 2. Optionally use `ctx.signal` for cancelable operations
 3. Register cleanup callbacks via `ctx.onCancel(cleanup)`
@@ -1856,12 +1932,11 @@ See [Migration Guide](docs/cancellation-design.md#migration-guide) for details.
 
 ```typescript
 // Ctrl-C during this sleep will cancel the timer
-await stack(handlers.Async.default()).run(() =>
-  Async.op.sleep(10000)
-);
+await stack(handlers.Async.default()).run(() => Async.op.sleep(10000));
 ```
-```
+````
 
+````
 ---
 
 ## Code Examples
@@ -1889,15 +1964,17 @@ const user = await stack(
 ).run(() => fetchUser("123"));
 
 // Press Ctrl-C during fetch → request aborted, cleanup runs, process exits
-```
+````
 
 **Output (normal completion):**
+
 ```
 Fetching user 123...
 Got user: Alice
 ```
 
 **Output (Ctrl-C during fetch):**
+
 ```
 Fetching user 123...
 ^C
@@ -1916,19 +1993,15 @@ const processOrder = (orderId: string) =>
     .do(() => Console.op.log("Step 1: Validating order..."))
     .let(() => Http.op.get(`/orders/${orderId}`))
     .then((res) => res.json())
-
     .do(() => Console.op.log("Step 2: Checking inventory..."))
     .let((order) => Http.op.post("/inventory/check", { items: order.items }))
     .then((res) => res.json())
-
     .do(() => Console.op.log("Step 3: Processing payment..."))
-    .do(() => Async.op.sleep(5000))  // Simulate payment processing
+    .do(() => Async.op.sleep(5000)) // Simulate payment processing
     .let(() => Http.op.post("/payments", { amount: 100 }))
     .then((res) => res.json())
-
     .do(() => Console.op.log("Step 4: Sending confirmation..."))
     .let(() => Http.op.post("/emails/send", { to: "customer@example.com" }))
-
     .return(() => "Order processed successfully");
 
 await stack(
@@ -1941,6 +2014,7 @@ await stack(
 ```
 
 **Output (Ctrl-C during Step 2):**
+
 ```
 Step 1: Validating order...
 Step 2: Checking inventory...
@@ -1962,14 +2036,13 @@ const fetchFromFastestRegion = (path: string) =>
     () => Http.op.get(`https://ap-south.api.com${path}`),
   ]);
 
-const response = await stack(handlers.Http.default()).run(() =>
-  fetchFromFastestRegion("/data")
-);
+const response = await stack(handlers.Http.default()).run(() => fetchFromFastestRegion("/data"));
 
 // First region to respond wins, other two requests automatically canceled
 ```
 
 **Behavior:**
+
 - US-East responds in 50ms → EU-West and AP-South aborted
 - No wasted resources on slow requests
 - Automatic cleanup, no manual AbortController wiring
@@ -1998,6 +2071,7 @@ const data = await stack(
 ```
 
 **Before (no cancellation):**
+
 ```
 User profile fails after 100ms
 Posts continues for 2 seconds
@@ -2007,6 +2081,7 @@ Total wasted time: 10 seconds
 ```
 
 **After (with cancellation):**
+
 ```
 User profile fails after 100ms
 → All other requests aborted immediately
@@ -2080,9 +2155,13 @@ const dbHandler = (connectionString: string): Handler => {
 const transferFunds = (fromId: string, toId: string, amount: number) =>
   seq()
     .do(() => Db.op.execute("BEGIN"))
-    .do(() => Db.op.execute(`UPDATE accounts SET balance = balance - ${amount} WHERE id = '${fromId}'`))
-    .do(() => Async.op.sleep(2000))  // Simulate processing time
-    .do(() => Db.op.execute(`UPDATE accounts SET balance = balance + ${amount} WHERE id = '${toId}'`))
+    .do(() =>
+      Db.op.execute(`UPDATE accounts SET balance = balance - ${amount} WHERE id = '${fromId}'`)
+    )
+    .do(() => Async.op.sleep(2000)) // Simulate processing time
+    .do(() =>
+      Db.op.execute(`UPDATE accounts SET balance = balance + ${amount} WHERE id = '${toId}'`)
+    )
     .do(() => Db.op.execute("COMMIT"))
     .return(() => "Transfer complete");
 
@@ -2146,13 +2225,15 @@ const fileHandler = (): Handler => ({
 
 const uploadToS3 = (data: Uint8Array, bucket: string, key: string) =>
   seq()
-    .let(() => File.op.createTemp())  // Create temp file (registers cleanup)
+    .let(() => File.op.createTemp()) // Create temp file (registers cleanup)
     .tap((tempPath) => File.op.write(tempPath, data))
     .let((tempPath) => File.op.read(tempPath))
-    .let((fileData) => Http.op.put(
-      `https://${bucket}.s3.amazonaws.com/${key}`,
-      fileData,
-    ))
+    .let((fileData) =>
+      Http.op.put(
+        `https://${bucket}.s3.amazonaws.com/${key}`,
+        fileData,
+      )
+    )
     .return(() => `s3://${bucket}/${key}`);
 
 await stack(
@@ -2400,26 +2481,31 @@ await stack(
 ### Advantages
 
 ✅ **Zero user-facing complexity**
+
 - Users never see or pass `AbortSignal`
 - Effect APIs remain clean: `Http.op.get(url)` not `Http.op.get(url, signal)`
 - Cancellation "just works" without manual wiring
 
 ✅ **Automatic cleanup**
+
 - Ctrl-C triggers cleanup without explicit signal handling
 - Resource leaks prevented automatically
 - Cleanup runs on any exit path (success, exception, abort)
 
 ✅ **Structured concurrency**
+
 - `par.race()` cancels losers automatically
 - `par.all()` cancels siblings on failure
 - Parent cancellation propagates to children
 
 ✅ **Type-safe**
+
 - `CancellationContext` enforced by handler signature
 - Runtime provides context, handlers consume it
 - No escape hatches or unsafe casts
 
 ✅ **Deterministic cleanup order**
+
 - LIFO guarantees reverse order of acquisition
 - Predictable behavior for dependent resources
 - Easy to reason about cleanup flow
@@ -2427,36 +2513,41 @@ await stack(
 ### Disadvantages
 
 ❌ **Breaking change to HandlerFn signature**
+
 - All custom handlers must add `ctx` parameter
 - Migration required for existing codebases
 - No backward compatibility (but acceptable for v0.x)
 
 ❌ **AbortSignal still exists (just hidden)**
+
 - Not as elegant as Effection's delimiters
 - Still tied to JavaScript's AbortController API
 - Platform-specific limitations (e.g., setTimeout doesn't accept signal in all runtimes)
 
 ❌ **Custom handlers must opt-in**
+
 - Handler authors must explicitly register cleanup
 - No automatic cleanup for arbitrary side effects
 - Documentation burden to educate handler authors
 
 ❌ **Runtime overhead**
+
 - Cleanup stack allocation per `run()`
 - LIFO reversal on cleanup execution
 - Signal listener installation/removal
 
 ### Limitations vs Effection
 
-| Feature | Effection | typelang (this design) |
-|---------|-----------|------------------------|
-| **Scope nesting** | Full delimiter-based scopes | Single scope per `run()` |
-| **Granularity** | Per-operation cancellation | Per-handler cancellation |
-| **Resource pattern** | Explicit `provide()` | Implicit via `ctx.onCancel()` |
-| **Cancellation API** | Structured via generators | Runtime-managed via AbortController |
-| **Composability** | Delimiters compose freely | Limited to handler stack |
+| Feature              | Effection                   | typelang (this design)              |
+| -------------------- | --------------------------- | ----------------------------------- |
+| **Scope nesting**    | Full delimiter-based scopes | Single scope per `run()`            |
+| **Granularity**      | Per-operation cancellation  | Per-handler cancellation            |
+| **Resource pattern** | Explicit `provide()`        | Implicit via `ctx.onCancel()`       |
+| **Cancellation API** | Structured via generators   | Runtime-managed via AbortController |
+| **Composability**    | Delimiters compose freely   | Limited to handler stack            |
 
-**Key difference:** Effection uses **delimited continuations** (via generators) for fine-grained scope control. typelang uses **AbortController** for simpler but less flexible cancellation.
+**Key difference:** Effection uses **delimited continuations** (via generators) for fine-grained
+scope control. typelang uses **AbortController** for simpler but less flexible cancellation.
 
 ### When This Design Falls Short
 
@@ -2480,30 +2571,36 @@ For typelang's current scope and goals, these trade-offs are acceptable because:
 
 ### 1. Replace Global Controller Stack with Async-Context Mechanism
 
-**Problem:** The current `controllerStack` is shared across all concurrent operations in the same runtime. This creates subtle bugs with promise concurrency:
+**Problem:** The current `controllerStack` is shared across all concurrent operations in the same
+runtime. This creates subtle bugs with promise concurrency:
 
 ```typescript
 // Runtime has controllerStack = [root]
 par.all({
-  a: () => withController(controllerA, async () => {
-    // controllerStack = [root, controllerA]
-    await Async.op.sleep(10);
-    // During sleep, another branch might push/pop!
-    // controllerStack could be [root, controllerB] now!
-    const ctrl = getCurrentScopeController();  // ← Gets controllerB! Bug!
-  }),
-  b: () => withController(controllerB, async () => {
-    // controllerStack = [root, controllerB]
-    // Race condition with branch a!
-  }),
+  a: () =>
+    withController(controllerA, async () => {
+      // controllerStack = [root, controllerA]
+      await Async.op.sleep(10);
+      // During sleep, another branch might push/pop!
+      // controllerStack could be [root, controllerB] now!
+      const ctrl = getCurrentScopeController(); // ← Gets controllerB! Bug!
+    }),
+  b: () =>
+    withController(controllerB, async () => {
+      // controllerStack = [root, controllerB]
+      // Race condition with branch a!
+    }),
 });
 ```
 
-**Root cause:** JavaScript promises execute concurrently but share the same synchronous call stack. The global `controllerStack` gets corrupted by interleaved push/pop operations.
+**Root cause:** JavaScript promises execute concurrently but share the same synchronous call stack.
+The global `controllerStack` gets corrupted by interleaved push/pop operations.
 
-**Solution:** Use **async-context propagation** to give each promise chain its own isolated controller stack.
+**Solution:** Use **async-context propagation** to give each promise chain its own isolated
+controller stack.
 
 **Approach 1: AsyncLocalStorage (Node.js / Deno with flag)**
+
 ```typescript
 // typelang/runtime.ts
 import { AsyncLocalStorage } from "node:async_hooks";
@@ -2536,6 +2633,7 @@ export const withController = async <T>(
 ```
 
 **Approach 2: Zone.js-style context (if AsyncLocalStorage unavailable)**
+
 ```typescript
 // Store controller in promise chain via continuation passing
 type EffContext = { controller: AbortController };
@@ -2548,10 +2646,12 @@ const withEffContext = <T>(ctx: EffContext, thunk: () => Promise<T>): Promise<T>
 };
 ```
 
-**Approach 3: Explicit context threading (current fallback)**
-Keep the current approach but document the limitation: "Do not use `getCurrentScopeController()` within concurrent branches. Pass the controller explicitly instead."
+**Approach 3: Explicit context threading (current fallback)** Keep the current approach but document
+the limitation: "Do not use `getCurrentScopeController()` within concurrent branches. Pass the
+controller explicitly instead."
 
-**Recommendation:** Start with Approach 3 (document limitation), plan migration to Approach 1 (AsyncLocalStorage) when Deno stabilizes async_hooks support.
+**Recommendation:** Start with Approach 3 (document limitation), plan migration to Approach 1
+(AsyncLocalStorage) when Deno stabilizes async_hooks support.
 
 ---
 
@@ -2561,7 +2661,8 @@ Keep the current approach but document the limitation: "Do not use `getCurrentSc
 
 1. **No abort on exception** - If thunk throws, controller isn't aborted
 2. **Cleanup list not removed** - Map entry persists after scope exits
-3. **Late abort handling** - If controller.abort() called after withController exits, cleanup doesn't run
+3. **Late abort handling** - If controller.abort() called after withController exits, cleanup
+   doesn't run
 
 **Proposed fixes:**
 
@@ -2613,6 +2714,7 @@ export const withController = async <T>(
 ```
 
 **Benefits:**
+
 - ✅ Exception triggers cancellation (fail-fast)
 - ✅ Late aborts still run cleanup (race condition safety)
 - ✅ Cleanup lists garbage-collected (no memory leaks)
@@ -2625,12 +2727,13 @@ export const withController = async <T>(
 
 **Proposed documentation:**
 
-| Helper | Cleanup Trigger | Use Case |
-|--------|----------------|----------|
-| `withChildScope(thunk)` | **Always** (like finally) | Resource acquisition (files, connections) |
-| `withController(ctrl, thunk)` | **Only if aborted** | Concurrent operations (par.race, par.all) |
+| Helper                        | Cleanup Trigger           | Use Case                                  |
+| ----------------------------- | ------------------------- | ----------------------------------------- |
+| `withChildScope(thunk)`       | **Always** (like finally) | Resource acquisition (files, connections) |
+| `withController(ctrl, thunk)` | **Only if aborted**       | Concurrent operations (par.race, par.all) |
 
 **withChildScope - "Finally-style" cleanup:**
+
 ```typescript
 // Use for resources that ALWAYS need cleanup
 const processFile = () =>
@@ -2649,29 +2752,34 @@ const processFile = () =>
 ```
 
 **withController - "Conditional cleanup":**
+
 ```typescript
 // Use for operations that only need cleanup if canceled
 par.race([
-  () => withController(controllerA, async () => {
-    const timer = setTimeout(callback, 1000);
+  () =>
+    withController(controllerA, async () => {
+      const timer = setTimeout(callback, 1000);
 
-    ctx.onCancel(() => clearTimeout(timer));  // Only runs if canceled
+      ctx.onCancel(() => clearTimeout(timer)); // Only runs if canceled
 
-    await doWork();
-    // Winner doesn't run cleanup ✓
-  }),
-  () => withController(controllerB, async () => {
-    // Loser runs cleanup ✓
-  }),
+      await doWork();
+      // Winner doesn't run cleanup ✓
+    }),
+  () =>
+    withController(controllerB, async () => {
+      // Loser runs cleanup ✓
+    }),
 ]);
 ```
 
 **Key principle:**
+
 - Use `ctx.onCancel()` for **cancellation-specific** cleanup (timers, HTTP aborts)
 - Use `finally` blocks for **always-needed** cleanup (file close, connection release)
 - Don't use `ctx.onCancel()` inside `withChildScope` - it's redundant (cleanup always runs)
 
 **Anti-pattern to avoid:**
+
 ```typescript
 // ❌ DON'T: Using ctx.onCancel for always-needed cleanup
 withChildScope(async () => {
@@ -2728,10 +2836,12 @@ const resourceHandler = (): Handler => ({
 // Usage
 const useDatabase = () =>
   seq()
-    .let(() => Resource.op.acquire(
-      () => connectToDb("postgresql://..."),
-      (db) => db.close(),
-    ))
+    .let(() =>
+      Resource.op.acquire(
+        () => connectToDb("postgresql://..."),
+        (db) => db.close(),
+      )
+    )
     .tap((db) => db.query("SELECT * FROM users"))
     .value();
 
@@ -2753,11 +2863,13 @@ const scope = <A, E>(thunk: () => Eff<A, E>): Eff<A, E> => {
 const processItems = (items: Item[]) =>
   seq()
     .let(() => items)
-    .then((items) => par.map(items, (item) =>
-      scope(() =>  // ← Nested scope per item
-        processItem(item)
-      )
-    ))
+    .then((items) =>
+      par.map(items, (item) =>
+        scope(() =>
+          // ← Nested scope per item
+          processItem(item)
+        ))
+    )
     .value();
 ```
 
@@ -2766,11 +2878,12 @@ const processItems = (items: Item[]) =>
 Allow handlers to specify cleanup priority:
 
 ```typescript
-ctx.onCancel(cleanup, { priority: "high" });  // Runs before normal priority
-ctx.onCancel(cleanup, { priority: "low" });   // Runs after normal priority
+ctx.onCancel(cleanup, { priority: "high" }); // Runs before normal priority
+ctx.onCancel(cleanup, { priority: "low" }); // Runs after normal priority
 ```
 
 Use cases:
+
 - High priority: Close database connections, release locks
 - Normal priority: Save state, log metrics
 - Low priority: Send telemetry, flush buffers
@@ -2797,7 +2910,7 @@ Per-run configuration for cleanup timeout:
 
 ```typescript
 await stack(...handlers).run(program, {
-  cleanupTimeoutMs: 10000,  // 10 seconds
+  cleanupTimeoutMs: 10000, // 10 seconds
   onCleanupTimeout: "warn" | "error" | "force-exit",
 });
 ```
@@ -2822,20 +2935,23 @@ Allow long-running operations to check for cancellation:
 const longComputation = () =>
   seq()
     .let(() => [1, 2, 3, ...1000000])
-    .then((items) => items.map((item) => {
-      // Check if canceled, abort early
-      if (ctx.signal.aborted) {
-        throw new AbortError("Computation canceled");
-      }
-      return processItem(item);
-    }))
+    .then((items) =>
+      items.map((item) => {
+        // Check if canceled, abort early
+        if (ctx.signal.aborted) {
+          throw new AbortError("Computation canceled");
+        }
+        return processItem(item);
+      })
+    )
     .value();
 ```
 
 **Challenge:** `ctx` not directly accessible in user code. Would need:
+
 ```typescript
 const Cancellation = defineEffect<"Cancellation", {
-  checkAborted(): void;  // Throws if aborted
+  checkAborted(): void; // Throws if aborted
   isAborted(): boolean;
 }>("Cancellation");
 ```
@@ -2849,7 +2965,7 @@ const controller = new AbortController();
 
 const task = stack(...handlers).runWithSignal(
   () => longRunningOperation(),
-  controller.signal,  // Optional external signal
+  controller.signal, // Optional external signal
 );
 
 // Cancel externally
@@ -2858,7 +2974,8 @@ setTimeout(() => controller.abort(), 5000);
 await task;
 ```
 
-**Caveat:** This contradicts design goal #3 (no external API), but might be needed for advanced use cases like testing.
+**Caveat:** This contradicts design goal #3 (no external API), but might be needed for advanced use
+cases like testing.
 
 ---
 
@@ -2868,7 +2985,8 @@ await task;
 
 - **Repository:** https://github.com/thefrontside/effection
 - **Version:** v4.0.0-beta.2
-- **Tutorial:** https://github.com/thefrontside/effection/blob/effection-v4.0.0-beta.2/docs/tutorial.mdx
+- **Tutorial:**
+  https://github.com/thefrontside/effection/blob/effection-v4.0.0-beta.2/docs/tutorial.mdx
 - **Key Concepts:**
   - Automatic disposal via operation encoding
   - Structured concurrency via parent-child scopes
@@ -2908,8 +3026,8 @@ await task;
 **File:** `examples/cancelable-file-processor.ts`
 
 ```typescript
-import { defineEffect, stack, seq, par, handlers } from "../typelang/mod.ts";
-import { Console, Async, Http } from "../typelang/effects.ts";
+import { defineEffect, handlers, par, seq, stack } from "../typelang/mod.ts";
+import { Async, Console, Http } from "../typelang/effects.ts";
 
 // Define File effect
 const File = defineEffect<"File", {
@@ -2981,30 +3099,27 @@ const processImages = (dir: string) =>
     .do(() => Console.op.log(`Processing images in ${dir}...`))
     .let(() => File.op.list(dir))
     .tap((files) => Console.op.log(`Found ${files.length} files`))
-
     // Process in parallel (with automatic cancellation on failure)
-    .let((files) => par.map(files, (filename) =>
-      seq()
-        .let(() => File.op.read(`${dir}/${filename}`))
-        .tap(() => Console.op.log(`Read ${filename}`))
-
-        // Simulate transformation (sleep)
-        .do(() => Async.op.sleep(1000))
-
-        // Upload to S3
-        .let((data) => Http.op.post(
-          `https://my-bucket.s3.amazonaws.com/${filename}`,
-          data,
-        ))
-        .tap(() => Console.op.log(`Uploaded ${filename}`))
-
-        // Delete original
-        .do(() => File.op.delete(`${dir}/${filename}`))
-        .tap(() => Console.op.log(`Deleted ${filename}`))
-
-        .return(() => filename)
-    ))
-
+    .let((files) =>
+      par.map(files, (filename) =>
+        seq()
+          .let(() => File.op.read(`${dir}/${filename}`))
+          .tap(() => Console.op.log(`Read ${filename}`))
+          // Simulate transformation (sleep)
+          .do(() => Async.op.sleep(1000))
+          // Upload to S3
+          .let((data) =>
+            Http.op.post(
+              `https://my-bucket.s3.amazonaws.com/${filename}`,
+              data,
+            )
+          )
+          .tap(() => Console.op.log(`Uploaded ${filename}`))
+          // Delete original
+          .do(() => File.op.delete(`${dir}/${filename}`))
+          .tap(() => Console.op.log(`Deleted ${filename}`))
+          .return(() => filename))
+    )
     .tap((processed) => Console.op.log(`Processed ${processed.length} images`))
     .return((processed) => processed);
 
@@ -3034,7 +3149,7 @@ console.log("Done:", result);
 
 ```typescript
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { stack, handlers, seq, par } from "./mod.ts";
+import { handlers, par, seq, stack } from "./mod.ts";
 import { Async, Console } from "./effects.ts";
 
 Deno.test("sleep cancellation via abort", async () => {
@@ -3046,8 +3161,7 @@ Deno.test("sleep cancellation via abort", async () => {
   const start = Date.now();
 
   try {
-    await stack(handlers.Async.default()).run(() =>
-      Async.op.sleep(5000)  // 5 second sleep
+    await stack(handlers.Async.default()).run(() => Async.op.sleep(5000) // 5 second sleep
     );
     throw new Error("Should have been canceled");
   } catch (error) {
@@ -3080,8 +3194,8 @@ Deno.test("par.race cancels losing branches", async () => {
 
   await stack(customAsyncHandler()).run(() =>
     par.race([
-      () => Async.op.sleep(10),     // Fast
-      () => Async.op.sleep(5000),   // Slow - should be canceled
+      () => Async.op.sleep(10), // Fast
+      () => Async.op.sleep(5000), // Slow - should be canceled
     ])
   );
 
@@ -3170,4 +3284,6 @@ Deno.test("cleanup errors don't propagate", async () => {
 
 **End of Design Document**
 
-This design provides a comprehensive blueprint for implementing automatic cancellation and disposal in typelang's effect system, inspired by Effection's structured concurrency model while maintaining typelang's functional programming principles and zero-dependency philosophy.
+This design provides a comprehensive blueprint for implementing automatic cancellation and disposal
+in typelang's effect system, inspired by Effection's structured concurrency model while maintaining
+typelang's functional programming principles and zero-dependency philosophy.
