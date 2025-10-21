@@ -12,7 +12,14 @@
 // - No combinatorial type explosion (no need for composite types)
 // - Type-safe capability threading (compiler ensures all required caps are provided)
 
-import { Handler, handlers as builtInHandlers, resolveEff, stack } from "./runtime.ts";
+import {
+  getCurrentScopeController,
+  Handler,
+  handlers as builtInHandlers,
+  resolveEff,
+  stack,
+  withController,
+} from "./runtime.ts";
 import { AwaitedReturn, Capability, Combine, Eff, Instr, Pure } from "./types.ts";
 
 type EffectFn = (...args: any[]) => unknown;
@@ -215,7 +222,38 @@ export const par = {
   all<T extends Record<string, () => Eff<unknown, unknown>>>(tasks: T) {
     const entries = Object.entries(tasks) as readonly [string, () => Eff<unknown, unknown>][];
     return resolveEff(
-      (async () => await mapEntries(entries))(),
+      (async () => {
+        const parentController = getCurrentScopeController();
+
+        // Create per-branch controllers
+        const branchControllers = entries.map(() => {
+          const controller = new AbortController();
+          // Link to parent for propagation
+          if (parentController) {
+            parentController.signal.addEventListener("abort", () => {
+              controller.abort();
+            });
+          }
+          return controller;
+        });
+
+        try {
+          // Run all branches with their own controllers
+          const results = await Promise.all(
+            entries.map(([_, task], index) =>
+              withController(branchControllers[index], async () => await resolveEff(task()))
+            ),
+          );
+
+          return Object.freeze(
+            Object.fromEntries(entries.map(([key], index) => [key, results[index]])),
+          );
+        } catch (error) {
+          // On failure, abort all branches
+          branchControllers.forEach((controller) => controller.abort());
+          throw error;
+        }
+      })(),
     ) as unknown as Eff<
       { readonly [K in keyof T]: AwaitedReturn<ReturnType<T[K]>> },
       unknown
@@ -223,14 +261,75 @@ export const par = {
   },
   map<T, U, E>(xs: readonly T[], f: (value: T) => Eff<U, E>) {
     return resolveEff(
-      (async () => await Promise.all(xs.map((x) => resolveEff(f(x)))))(),
+      (async () => {
+        const parentController = getCurrentScopeController();
+
+        // Create per-item controllers
+        const itemControllers = xs.map(() => {
+          const controller = new AbortController();
+          // Link to parent for propagation
+          if (parentController) {
+            parentController.signal.addEventListener("abort", () => {
+              controller.abort();
+            });
+          }
+          return controller;
+        });
+
+        try {
+          // Run all items with their own controllers
+          const results = await Promise.all(
+            xs.map((x, index) =>
+              withController(itemControllers[index], async () => await resolveEff(f(x)))
+            ),
+          );
+
+          return results;
+        } catch (error) {
+          // On failure, abort all items
+          itemControllers.forEach((controller) => controller.abort());
+          throw error;
+        }
+      })(),
     ) as unknown as Eff<readonly AwaitedReturn<U>[], E>;
   },
   race<T, E>(thunks: readonly (() => Eff<T, E>)[]) {
-    return resolveEff(Promise.race(thunks.map((t) => resolveEff(t())))) as unknown as Eff<
-      AwaitedReturn<T>,
-      E
-    >;
+    return resolveEff(
+      (async () => {
+        const parentController = getCurrentScopeController();
+
+        // Create per-branch controllers
+        const branchControllers = thunks.map(() => {
+          const controller = new AbortController();
+          // Link to parent for propagation
+          if (parentController) {
+            parentController.signal.addEventListener("abort", () => {
+              controller.abort();
+            });
+          }
+          return controller;
+        });
+
+        // Run all branches with their own controllers
+        const branchPromises = thunks.map(async (thunk, index) =>
+          withController(branchControllers[index], async () => {
+            const result = await resolveEff(thunk());
+            return { index, result } as const;
+          })
+        );
+
+        const winner = await Promise.race(branchPromises);
+
+        // Abort losing branches - withController ensures only losers run cleanup
+        branchControllers.forEach((controller, i) => {
+          if (i !== winner.index) {
+            controller.abort();
+          }
+        });
+
+        return winner.result;
+      })(),
+    ) as unknown as Eff<AwaitedReturn<T>, E>;
   },
 } as const;
 

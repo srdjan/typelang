@@ -50,3 +50,12 @@ export interface TimeSpec {
 }
 
 export const Time = defineEffect<"Time", TimeSpec>("Time");
+
+export interface HttpSpec {
+  get(url: string, options?: RequestInit): Response;
+  post(url: string, body?: unknown, options?: RequestInit): Response;
+  put(url: string, body?: unknown, options?: RequestInit): Response;
+  delete(url: string, options?: RequestInit): Response;
+}
+
+export const Http = defineEffect<"Http", HttpSpec>("Http");

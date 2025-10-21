@@ -1,7 +1,7 @@
 // typelang/runtime.ts
 // Effect handler runtime with composable handler stacks.
 
-import { AnyInstr, AwaitedReturn } from "./types.ts";
+import { AnyInstr, AwaitedReturn, CancellationContext } from "./types.ts";
 
 type Halt = Readonly<{ type: typeof HALT; effect: string; value: unknown }>;
 
@@ -9,7 +9,11 @@ type FinalizerResult = Readonly<{ value: unknown; halt: Halt | null }>;
 type Finalizer = (value: unknown, halt: Halt | null) => unknown | Promise<unknown>;
 
 type Next = (override?: AnyInstr) => Promise<unknown>;
-type HandlerFn = (instr: AnyInstr, next: Next) => unknown | Promise<unknown>;
+type HandlerFn = (
+  instr: AnyInstr,
+  next: Next,
+  ctx: CancellationContext,
+) => unknown | Promise<unknown>;
 
 export type Handler = Readonly<{
   name: string;
@@ -22,6 +26,8 @@ type Dispatch = <I extends AnyInstr>(instr: I) => Promise<AwaitedReturn<I["__ret
 type RuntimeInstance = Readonly<{
   handlers: readonly Handler[];
   dispatch: Dispatch;
+  controllerStack: AbortController[];
+  cleanupStacks: Map<AbortController, Array<() => void | Promise<void>>>;
 }>;
 
 const HALT = Symbol("typelang.halt");
@@ -86,7 +92,77 @@ const resolveWithRuntime = async (
   return value;
 };
 
+const runCleanups = async (
+  runtime: RuntimeInstance,
+  controller: AbortController,
+  timeoutMs = 5000,
+): Promise<void> => {
+  const cleanups = runtime.cleanupStacks.get(controller);
+  if (!cleanups || cleanups.length === 0) return;
+
+  // Execute in LIFO order (reverse of registration) with timeout
+  const reversed = [...cleanups].reverse();
+
+  const cleanupPromise = (async () => {
+    for (const cleanup of reversed) {
+      try {
+        await cleanup();
+      } catch (error) {
+        // Fail-safe: log but don't propagate cleanup errors
+        console.error("Cleanup error:", error);
+      }
+    }
+  })();
+
+  const timeoutPromise = new Promise<void>((resolve) => {
+    setTimeout(() => {
+      console.warn(`Cleanup timeout exceeded (${timeoutMs}ms) - forcing continuation`);
+      resolve();
+    }, timeoutMs);
+  });
+
+  await Promise.race([cleanupPromise, timeoutPromise]);
+};
+
+const createCancellationContext = (runtime: RuntimeInstance): CancellationContext => {
+  // Dynamically resolve the current controller from the top of the stack
+  const getCurrentController = (): AbortController => {
+    const stack = runtime.controllerStack;
+    if (stack.length === 0) {
+      throw new Error("No controller in stack - this should never happen");
+    }
+    return stack[stack.length - 1];
+  };
+
+  return {
+    get signal(): AbortSignal {
+      return getCurrentController().signal;
+    },
+    onCancel: (cleanup: () => void | Promise<void>): void => {
+      const controller = getCurrentController();
+
+      // If already aborted, run cleanup immediately
+      if (controller.signal.aborted) {
+        Promise.resolve(cleanup()).catch((error) => {
+          console.error("Immediate cleanup error:", error);
+        });
+        return;
+      }
+
+      // Otherwise, register for later execution
+      const cleanups = runtime.cleanupStacks.get(controller);
+      if (cleanups) {
+        cleanups.push(cleanup);
+      } else {
+        runtime.cleanupStacks.set(controller, [cleanup]);
+      }
+    },
+  };
+};
+
 const createRuntime = (handlers: readonly Handler[]): RuntimeInstance => {
+  let runtime: RuntimeInstance;
+
   const runHandler = (index: number, instr: AnyInstr): unknown | Promise<unknown> => {
     if (index < 0) {
       const availableHandlers = handlers.map((h) => h.name).join(", ");
@@ -103,18 +179,24 @@ const createRuntime = (handlers: readonly Handler[]): RuntimeInstance => {
       if (fn) {
         const nextDispatch: Next = (override) =>
           Promise.resolve(runHandler(index - 1, override ?? instr));
-        return fn(instr, nextDispatch);
+        const ctx = createCancellationContext(runtime);
+        return fn(instr, nextDispatch, ctx);
       }
     }
     return runHandler(index - 1, instr);
   };
 
-  let runtime: RuntimeInstance;
   const dispatch: Dispatch = async (instr) => {
     const result = await runHandler(handlers.length - 1, instr);
     return await resolveWithRuntime(result, runtime) as AwaitedReturn<typeof instr["__ret"]>;
   };
-  runtime = { handlers, dispatch };
+
+  runtime = {
+    handlers,
+    dispatch,
+    controllerStack: [],
+    cleanupStacks: new Map(),
+  };
   return runtime;
 };
 
@@ -144,9 +226,28 @@ export const resolveEff = async <T>(value: T): Promise<AwaitedReturn<T>> => {
 export const stack = (...handlers: readonly Handler[]) => ({
   run: async <A>(thunk: () => A): Promise<A> => {
     const runtime = createRuntime(handlers);
+    const rootController = new AbortController();
+    runtime.controllerStack.push(rootController);
     runtimeStack.push(runtime);
+
+    // Install signal handlers for graceful shutdown
+    const signalHandler = () => {
+      console.log("\nReceived interrupt signal - starting graceful shutdown...");
+      rootController.abort();
+    };
+
+    let signalsInstalled = false;
+    try {
+      Deno.addSignalListener("SIGINT", signalHandler);
+      Deno.addSignalListener("SIGTERM", signalHandler);
+      signalsInstalled = true;
+    } catch {
+      // Signal listeners not available (Windows, tests, etc.) - continue without them
+    }
+
     let value: unknown;
     let halted: Halt | null = null;
+
     try {
       value = await resolveWithRuntime(thunk(), runtime);
     } catch (error) {
@@ -154,13 +255,44 @@ export const stack = (...handlers: readonly Handler[]) => ({
         halted = error;
         value = undefined;
       } else {
+        // Abort and run cleanup on exception
+        rootController.abort();
+        await runCleanups(runtime, rootController);
+        runtime.controllerStack.pop();
         runtimeStack.pop();
+
+        // Remove signal listeners
+        if (signalsInstalled) {
+          try {
+            Deno.removeSignalListener("SIGINT", signalHandler);
+            Deno.removeSignalListener("SIGTERM", signalHandler);
+          } catch {
+            // Ignore removal errors
+          }
+        }
+
         throw error;
       }
     }
 
+    // Run cleanups before finalizers
+    if (rootController.signal.aborted) {
+      await runCleanups(runtime, rootController);
+    }
+
     const finalized = await applyFinalizers(runtime, defaultFinalizeResult(value, halted));
+    runtime.controllerStack.pop();
     runtimeStack.pop();
+
+    // Remove signal listeners
+    if (signalsInstalled) {
+      try {
+        Deno.removeSignalListener("SIGINT", signalHandler);
+        Deno.removeSignalListener("SIGTERM", signalHandler);
+      } catch {
+        // Ignore removal errors
+      }
+    }
 
     if (finalized.halt) {
       throw new Error(`Unhandled effect ${finalized.halt.effect}`);
@@ -168,6 +300,82 @@ export const stack = (...handlers: readonly Handler[]) => ({
     return finalized.value as A;
   },
 });
+
+// Scope management helpers --------------------------------------------------
+
+/**
+ * Get the current AbortController from the top of the stack.
+ * Used by combinators to access the parent controller for linking child controllers.
+ */
+export const getCurrentScopeController = (): AbortController | null => {
+  const runtime = runtimeStack[runtimeStack.length - 1];
+  if (!runtime || runtime.controllerStack.length === 0) {
+    return null;
+  }
+  return runtime.controllerStack[runtime.controllerStack.length - 1];
+};
+
+/**
+ * Execute a thunk with a specific AbortController pushed to the stack.
+ * Cleanup only runs if the controller is aborted.
+ * Use this for per-branch controllers in parallel operations.
+ */
+export const withController = async <T>(
+  controller: AbortController,
+  thunk: () => Promise<T>,
+): Promise<T> => {
+  const runtime = runtimeStack[runtimeStack.length - 1];
+  if (!runtime) {
+    throw new Error("withController called outside of runtime stack");
+  }
+
+  runtime.controllerStack.push(controller);
+
+  try {
+    const result = await thunk();
+    return result;
+  } finally {
+    runtime.controllerStack.pop();
+
+    // Only run cleanup if this scope was aborted
+    if (controller.signal.aborted) {
+      await runCleanups(runtime, controller);
+    }
+  }
+};
+
+/**
+ * Execute a thunk with a new child AbortController.
+ * The child is linked to the parent so parent cancellation propagates.
+ * Cleanup always runs (like a finally block).
+ */
+export const withChildScope = async <T>(thunk: () => Promise<T>): Promise<T> => {
+  const runtime = runtimeStack[runtimeStack.length - 1];
+  if (!runtime) {
+    throw new Error("withChildScope called outside of runtime stack");
+  }
+
+  const parentController = runtime.controllerStack[runtime.controllerStack.length - 1];
+  const childController = new AbortController();
+
+  // Link child to parent for propagation
+  if (parentController) {
+    parentController.signal.addEventListener("abort", () => {
+      childController.abort();
+    });
+  }
+
+  runtime.controllerStack.push(childController);
+
+  try {
+    const result = await thunk();
+    return result;
+  } finally {
+    runtime.controllerStack.pop();
+    // Always run cleanup (finally-style)
+    await runCleanups(runtime, childController);
+  }
+};
 
 // Built-in handlers ---------------------------------------------------------
 
@@ -186,15 +394,15 @@ const consoleCapture = (): Handler => {
   return {
     name: "Console",
     handles: {
-      log: (instr) => {
+      log: (instr, next, ctx) => {
         const [msg] = instr.args;
         logs.push(String(msg));
       },
-      warn: (instr) => {
+      warn: (instr, next, ctx) => {
         const [msg] = instr.args;
         warns.push(String(msg));
       },
-      error: (instr) => {
+      error: (instr, next, ctx) => {
         const [msg] = instr.args;
         errors.push(String(msg));
       },
@@ -209,15 +417,15 @@ const consoleCapture = (): Handler => {
 const consoleLive = (sink: ConsoleRecord = console): Handler => ({
   name: "Console",
   handles: {
-    log: (instr, next) => {
+    log: (instr, next, ctx) => {
       sink.log?.(...instr.args);
       return next(instr);
     },
-    warn: (instr, next) => {
+    warn: (instr, next, ctx) => {
       sink.warn?.(...instr.args);
       return next(instr);
     },
-    error: (instr, next) => {
+    error: (instr, next, ctx) => {
       sink.error?.(...instr.args);
       return next(instr);
     },
@@ -229,7 +437,7 @@ const exceptionTryCatch = (): Handler => {
   return {
     name: "Exception",
     handles: {
-      fail: (instr) => {
+      fail: (instr, next, ctx) => {
         const [error] = instr.args;
         failure = error;
         halt("Exception", error);
@@ -252,12 +460,12 @@ const stateWith = <S>(initial: S): Handler => {
   return {
     name: "State",
     handles: {
-      get: () => state,
-      put: (instr) => {
-        const [next] = instr.args as [S];
-        state = next;
+      get: (instr, next, ctx) => state,
+      put: (instr, next, ctx) => {
+        const [nextState] = instr.args as [S];
+        state = nextState;
       },
-      modify: (instr) => {
+      modify: (instr, next, ctx) => {
         const [fn] = instr.args as [(s: S) => S];
         state = fn(state);
       },
@@ -272,14 +480,50 @@ const stateWith = <S>(initial: S): Handler => {
 const asyncDefault = (): Handler => ({
   name: "Async",
   handles: {
-    sleep: (instr) =>
+    sleep: (instr, next, ctx) =>
       new Promise((resolve) => {
         const [ms] = instr.args as [number];
-        setTimeout(resolve, ms);
+        const timerId = setTimeout(resolve, ms);
+        // Register cleanup to cancel the timer
+        ctx.onCancel(() => clearTimeout(timerId));
       }),
-    await: async (instr) => {
+    await: async (instr, next, ctx) => {
       const [p] = instr.args as [Promise<unknown>];
       return await p;
+    },
+  },
+});
+
+const httpDefault = (): Handler => ({
+  name: "Http",
+  handles: {
+    get: async (instr, next, ctx) => {
+      const [url, options] = instr.args as [string, RequestInit | undefined];
+      return await fetch(url, { ...options, signal: ctx.signal });
+    },
+    post: async (instr, next, ctx) => {
+      const [url, body, options] = instr.args as [string, unknown, RequestInit | undefined];
+      return await fetch(url, {
+        ...options,
+        method: "POST",
+        body: JSON.stringify(body),
+        headers: { "content-type": "application/json", ...options?.headers },
+        signal: ctx.signal,
+      });
+    },
+    put: async (instr, next, ctx) => {
+      const [url, body, options] = instr.args as [string, unknown, RequestInit | undefined];
+      return await fetch(url, {
+        ...options,
+        method: "PUT",
+        body: JSON.stringify(body),
+        headers: { "content-type": "application/json", ...options?.headers },
+        signal: ctx.signal,
+      });
+    },
+    delete: async (instr, next, ctx) => {
+      const [url, options] = instr.args as [string, RequestInit | undefined];
+      return await fetch(url, { ...options, method: "DELETE", signal: ctx.signal });
     },
   },
 });
@@ -297,5 +541,8 @@ export const handlers = {
   },
   Async: {
     default: asyncDefault,
+  },
+  Http: {
+    default: httpDefault,
   },
 } as const;

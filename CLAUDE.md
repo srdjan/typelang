@@ -103,7 +103,7 @@ const complexProgram: Eff<User, {
 const handler: Handler = {
   name: "MyEffect",
   handles: {
-    doThing: (instr, next) => {
+    doThing: (instr, next, ctx) => {
       const [x] = instr.args;
       return `Result: ${x}`;
     }
@@ -127,7 +127,8 @@ const result = await stack(handler).run(() => program);
 - `Console.live()` / `Console.capture()` - logging with different capture modes
 - `Exception.tryCatch()` - converts effect failures to `{ tag: "Ok"|"Err" }` results
 - `State.with(initial)` - stateful computations
-- `Async.default()` - async operations (sleep, await)
+- `Async.default()` - async operations (sleep, await) with automatic cancellation
+- `Http.default()` - HTTP requests (get, post, put, delete) with automatic cancellation
 
 #### 2. Sequential & Parallel Combinators
 
@@ -163,7 +164,123 @@ par.map([1, 2, 3], (x) => compute(x)); // Returns array of results
 par.race([() => fast(), () => slow()]); // First to complete
 ```
 
-#### 3. HTTP Server (server/)
+#### 3. Automatic Cancellation & Cleanup
+
+**typelang v0.3.0** introduces automatic cancellation and resource cleanup inspired by Effection's
+automatic disposal. Cancellation is completely transparent to users - you never see or pass
+`AbortSignal` manually.
+
+**Key Features:**
+
+- **Ctrl-C Handling**: SIGINT/SIGTERM automatically trigger cleanup and graceful shutdown
+- **Structured Concurrency**: Parent cancellation propagates to children (`par.race`, `par.all`)
+- **LIFO Cleanup Order**: Resources released in reverse order of acquisition
+- **Fail-Safe**: Cleanup errors are logged but don't propagate
+- **Timeout Protection**: 5-second default timeout prevents hung cleanup
+
+**Handler Signature (BREAKING CHANGE in v0.3.0):**
+
+All handlers now receive a third parameter `ctx: CancellationContext`:
+
+```typescript
+type HandlerFn = (
+  instr: AnyInstr,
+  next: Next,
+  ctx: CancellationContext  // NEW: Required third parameter
+) => unknown | Promise<unknown>;
+```
+
+**CancellationContext API:**
+
+```typescript
+type CancellationContext = {
+  readonly signal: AbortSignal;  // Check if cancelled: signal.aborted
+  readonly onCancel: (cleanup: () => void | Promise<void>) => void;  // Register cleanup
+};
+```
+
+**Example: Cancelable HTTP Request**
+
+```typescript
+const httpHandler: Handler = {
+  name: "Http",
+  handles: {
+    get: async (instr, next, ctx) => {
+      const [url] = instr.args;
+      // Pass signal to fetch - automatic cancellation on Ctrl-C or parent abort
+      return await fetch(url, { signal: ctx.signal });
+    }
+  }
+};
+```
+
+**Example: Resource Cleanup**
+
+```typescript
+const fileHandler: Handler = {
+  name: "File",
+  handles: {
+    write: async (instr, next, ctx) => {
+      const [path, data] = instr.args;
+      const file = await Deno.open(path, { write: true, create: true });
+
+      // Register cleanup - runs on cancellation in LIFO order
+      ctx.onCancel(async () => {
+        await file.close();
+        console.log(`Cleaned up file: ${path}`);
+      });
+
+      await file.write(new TextEncoder().encode(data));
+      return file.rid;
+    }
+  }
+};
+```
+
+**Parallel Cancellation Semantics:**
+
+- `par.all()`: On failure, aborts all sibling branches
+- `par.race()`: Winner completes normally, losers are aborted (cleanup runs)
+- `par.map()`: On any failure, aborts all items
+
+```typescript
+// Race example: losing branches automatically clean up
+const fastest = await stack(handlers.Http.default()).run(() =>
+  par.race([
+    () => Http.op.get("https://api1.example.com/data"),
+    () => Http.op.get("https://api2.example.com/data"),
+    () => Http.op.get("https://api3.example.com/data"),
+  ])
+);
+// Winner's request completes, losers are cancelled and cleaned up
+```
+
+**Best Practices:**
+
+1. **Always register cleanup for acquired resources** (files, connections, timers)
+2. **Pass `ctx.signal` to cancelable APIs** (fetch, setTimeout, subprocess)
+3. **Don't throw from cleanup callbacks** - log errors instead
+4. **Test Ctrl-C behavior** during development with long-running operations
+
+**Migration from v0.2.x:**
+
+All custom handlers must add the `ctx` parameter:
+
+```typescript
+// Before (v0.2.x)
+handles: {
+  myOp: (instr, next) => { /* ... */ }
+}
+
+// After (v0.3.0)
+handles: {
+  myOp: (instr, next, ctx) => { /* ... */ }
+}
+```
+
+See `docs/migration-v0.3.md` for full migration guide.
+
+#### 4. HTTP Server (server/)
 
 The server uses **middleware composition** and **data-driven routing**:
 
@@ -206,7 +323,7 @@ const server = createServer(routes, {
 }
 ```
 
-#### 4. Functional Subset Enforcement
+#### 5. Functional Subset Enforcement
 
 The `app/` directory must follow strict subset rules checked by `lint_subset.ts`. This ensures:
 
