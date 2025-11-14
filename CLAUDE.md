@@ -23,7 +23,9 @@ deno task dev        # Start development server with watch mode (-A for all perm
 ### Testing
 
 ```bash
-deno test            # Run all tests in the runtime and tooling
+deno task test              # Run all tests (116 tests)
+deno task test:watch        # Run tests in watch mode (auto-rerun on changes)
+deno task test:coverage     # Run tests with coverage report
 ```
 
 ### Linting
@@ -32,6 +34,14 @@ deno test            # Run all tests in the runtime and tooling
 deno task lint       # Run Deno linter + custom subset checker
 deno fmt             # Format code
 ```
+
+### Git Hooks
+
+```bash
+deno task setup-hooks   # Configure git hooks (pre-commit, post-commit, pre-push)
+```
+
+Git hooks in `.githooks/` automatically run format checks, linting, and tests before commits.
 
 The custom subset linter (`scripts/lint_subset.ts`) enforces strict functional rules on files
 matching `INCLUDE_PATTERNS` (currently `app/` directory). It forbids:
@@ -54,9 +64,12 @@ typelang/           # Effect runtime: Eff type, defineEffect, handlers, combinat
   mod.ts            # Public API: defineEffect, seq, par, match, pipe, handlers
   runtime.ts        # Effect interpreter with handler stacks
   types.ts          # Core types: Eff<A,E>, Capability, Instr
-  effects.ts        # Example effect definitions (Console, State, etc.)
+  effects.ts        # Built-in effect definitions (Console, State, Exception, Async, Http, Resource)
+  resource.ts       # Resource effect & RAII helpers (use, defineResource)
+  errors.ts         # Standard error types and Result utilities
   seq.ts, par.ts    # Sequential/parallel combinators (deprecated, use mod.ts)
   match.ts, pipe.ts # Utilities (deprecated, use mod.ts)
+  runtime_test.ts   # Runtime integration tests
 
 server/             # HTTP server implementation (NOT subject to subset linting)
   main.ts           # Server entry point, middleware composition
@@ -64,15 +77,25 @@ server/             # HTTP server implementation (NOT subject to subset linting)
   middleware.ts     # Composable middleware (logger, CORS, rate-limit, static, auth, error boundary)
   http.ts           # HTTP utilities (json, html, redirect, parseQuery)
   types.ts          # Server types (Handler, Route, Middleware, RequestCtx)
+  highlight.ts      # Syntax highlighting utilities
+  effects.ts        # Server-specific effects
 
 app/                # Application routes (STRICTLY enforces subset rules)
   routes.ts         # Route definitions as data (Routes array)
+  showcase.ts       # Interactive demo programs
+  demos_additional.ts  # Additional demo programs
+  pages/            # Page components (landing, learn, comparison)
+  components/       # Reusable UI components
 
 scripts/            # Development tooling
   lint_subset.ts    # Custom lexical linter for functional subset
 
+tests/              # Test suite (116 tests)
+  *_test.ts         # Unit and integration tests for all modules
+
 public/             # Static assets served at /static
 docs/               # Design specifications and guides
+.githooks/          # Git hooks (pre-commit, post-commit, pre-push)
 ```
 
 ### Key Architectural Patterns
@@ -129,6 +152,7 @@ const result = await stack(handler).run(() => program);
 - `State.with(initial)` - stateful computations
 - `Async.default()` - async operations (sleep, await) with automatic cancellation
 - `Http.default()` - HTTP requests (get, post, put, delete) with automatic cancellation
+- `Resource.scope()` - RAII-style resource management with automatic cleanup
 
 #### 2. Sequential & Parallel Combinators
 
@@ -323,7 +347,105 @@ const server = createServer(routes, {
 }
 ```
 
-#### 5. Functional Subset Enforcement
+#### 5. Resource Management (RAII)
+
+**typelang v0.3.0+** introduces automatic resource management inspired by Gleam's `use` construct and
+Rust's RAII pattern. Resources are automatically acquired and disposed via the `Resource` effect.
+
+**Defining resources:**
+
+```typescript
+import { defineResource } from "./typelang/mod.ts";
+
+const fileResource = (path: string) =>
+  defineResource(
+    () => Deno.openSync(path, { read: true }),  // acquire
+    (file) => { file.close(); return undefined; }, // release
+    { label: `file(${path})` }
+  );
+```
+
+**Using resources with automatic cleanup:**
+
+```typescript
+await stack(handlers.Resource.scope()).run(() =>
+  use({ file: () => fileResource("./data.txt") }).in(({ file }) => {
+    const text = new TextDecoder().decode(Deno.readAllSync(file));
+    return text;
+  })
+);
+```
+
+**Key features:**
+
+- **Automatic cleanup**: Resources released on normal completion, exceptions, and cancellation
+- **LIFO order**: Multiple resources cleaned up in reverse acquisition order
+- **Composable**: Works with `seq()`, `par`, and arbitrary handler stacks
+- **Type-safe**: Capability requirements inferred from acquire/release functions
+- **Cancellation-aware**: Integrates with `CancellationContext` for graceful shutdown
+
+**Multiple resources:**
+
+```typescript
+use(
+  { file: () => fileResource("./logs/access.log") },
+  { db: () => dbResource("postgres://...") }
+).in(async ({ file, db }) => {
+  const request = await readRequest(file);
+  await db.execute("INSERT INTO requests ...", request);
+  return request.id;
+});
+```
+
+See `docs/resource-usage.md` and `docs/resource-raii-design.md` for detailed documentation.
+
+#### 6. Error Handling & Result Types
+
+The `typelang/errors.ts` module provides standard error types and Result utilities:
+
+**Standard error types:**
+
+```typescript
+- ValidationError  - field validation failures
+- NotFoundError    - entity not found
+- UnauthorizedError - authentication failures
+- ForbiddenError   - authorization failures
+- ConflictError    - resource conflicts
+```
+
+**Result type and utilities:**
+
+```typescript
+type Result<T, E> =
+  | { tag: "Ok", value: T }
+  | { tag: "Err", error: E };
+
+// Constructors
+ok(value)           // Create Ok result
+err(error)          // Create Err result
+
+// Type guards
+isOk(result)        // Check if Ok
+isErr(result)       // Check if Err
+
+// Utilities
+unwrap(result)      // Extract value or throw
+unwrapOr(result, defaultValue)
+mapResult(result, f)        // Transform value
+mapError(result, f)         // Transform error
+flatMapResult(result, f)    // Monadic bind
+```
+
+**Pattern matching with `match()`:**
+
+```typescript
+match(result, {
+  Ok: (v) => v.value,
+  Err: (e) => e.error,
+});
+```
+
+#### 7. Functional Subset Enforcement
 
 The `app/` directory must follow strict subset rules checked by `lint_subset.ts`. This ensures:
 
@@ -354,9 +476,16 @@ pipe(
 
 ## Testing Strategy
 
-- **Unit tests**: Test pure functions and effect handlers in isolation
-- **Runtime tests**: Verify handler composition and effect resolution (`typelang/runtime_test.ts`)
-- **Integration tests**: Test routes with synthetic Request objects (no real HTTP server needed)
+**Comprehensive test suite** with 116 tests in the `tests/` directory:
+
+- **Runtime tests** (`runtime_test.ts`): Handler composition, effect resolution, cancellation
+- **Effect tests** (`effects_test.ts`): Console, State, Exception, Async, Http effects
+- **Resource tests** (`resource_test.ts`): RAII scopes, cleanup ordering, cancellation
+- **Cancellation tests** (`cancellation_test.ts`): Signal propagation, cleanup behavior
+- **Server tests** (`router_test.ts`, `middleware_test.ts`, `http_test.ts`): HTTP routing, middleware composition
+- **Integration tests** (`app_routes_test.ts`, `showcase_test.ts`): Full application routes
+- **Security tests**: Path traversal, input validation
+- **Subset linter tests** (`subset_test.ts`): Functional subset enforcement
 
 Example testing pattern:
 
@@ -366,6 +495,11 @@ Deno.test("handler should...", async () => {
   assertEquals(result, expected);
 });
 ```
+
+Run tests with:
+- `deno task test` - run all tests
+- `deno task test:watch` - auto-rerun on file changes
+- `deno task test:coverage` - generate coverage report
 
 ## Common Development Tasks
 
@@ -416,6 +550,31 @@ Deno.test("handler should...", async () => {
 
 2. Add to middleware chain in `server/main.ts` `before` array
 
+### Adding a Resource
+
+1. Define a resource descriptor:
+   ```typescript
+   const myResource = (config: Config) =>
+     defineResource(
+       () => acquireResource(config),    // Acquisition
+       (resource) => resource.cleanup(),  // Release
+       { label: `my-resource(${config.id})` }
+     );
+   ```
+
+2. Use in a program with automatic cleanup:
+   ```typescript
+   use({ res: () => myResource(config) }).in(({ res }) => {
+     // Use resource here - automatically cleaned up on exit
+     return res.doWork();
+   });
+   ```
+
+3. Run with Resource handler:
+   ```typescript
+   await stack(handlers.Resource.scope()).run(() => program);
+   ```
+
 ## Design Constraints
 
 - **Zero npm dependencies**: Uses only Deno standard library
@@ -428,8 +587,65 @@ Deno.test("handler should...", async () => {
 
 All configuration in `deno.jsonc`:
 
-- Tasks: `dev`, `lint`, `fmt`
-- Formatter: 2-space indent, 100 char line width, semicolons required
-- Linter: Recommended rules only
+**Tasks:**
+- `dev` - Start development server
+- `test` - Run all tests
+- `test:watch` - Run tests in watch mode
+- `test:coverage` - Run tests with coverage report
+- `lint` - Run Deno linter + custom subset checker
+- `fmt` - Format code
+- `setup-hooks` - Configure git hooks
+
+**Formatter:**
+- 2-space indent
+- 100 char line width
+- Semicolons required
+
+**Linter:**
+- Recommended rules enabled
+- Excludes: no-import-prefix, ban-types, no-explicit-any, require-await, no-unused-vars, prefer-const
+
+**Imports:**
+- `@srdjan/bluesky-bot` - External JSR dependency (if used)
 
 No build step required - Deno runs TypeScript directly.
+
+## Git Workflow
+
+**Pre-commit hook** (`.githooks/pre-commit`) automatically runs:
+1. Format check (`deno fmt --check`)
+2. Lint check (`deno task lint`)
+3. All tests (`deno test`)
+
+Enable hooks with: `deno task setup-hooks`
+
+**Branch naming:** Feature branches should use descriptive names (e.g., `feature/resource-effect`,
+`fix/cancellation-bug`)
+
+## Documentation
+
+**Key documentation files:**
+- `CLAUDE.md` - This file: comprehensive guide for AI assistants
+- `README.md` - User-facing project overview
+- `TODO.md` - Planned features and migration tasks
+- `docs/resource-usage.md` - Resource management guide
+- `docs/resource-raii-design.md` - Resource effect design document
+- `docs/migration-v0.3.md` - Migration guide from v0.2.x
+- `docs/cancellation-design.md` - Cancellation system design
+- `docs/TESTING.md` - Testing strategy and guidelines
+- `docs/IMPROVEMENTS.md` - Potential improvements and ideas
+
+## Version History
+
+**v0.3.0+** (Current)
+- Resource effect with RAII-style automatic cleanup
+- Enhanced cancellation with CancellationContext (breaking change)
+- Standard error types and Result utilities
+- Comprehensive test suite (116 tests)
+- Git hooks for automated quality checks
+
+**v0.2.x**
+- Basic algebraic effects runtime
+- HTTP server with middleware composition
+- Functional subset linter
+- seq() and par() combinators
