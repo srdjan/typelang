@@ -2,7 +2,9 @@
 // Effect handler runtime with composable handler stacks.
 
 import type { ResourceDescriptor } from "./resource.ts";
-import { AnyInstr, AwaitedReturn, CancellationContext, Eff } from "./types.ts";
+import { AnyInstr, AwaitedReturn, CancellationContext } from "./types.ts";
+import { err, ok, type Result } from "./errors.ts";
+import type { EffectInterface } from "./interfaces.ts";
 
 type Halt = Readonly<{ type: typeof HALT; effect: string; value: unknown }>;
 
@@ -14,10 +16,31 @@ type HandlerFn = (
   instr: AnyInstr,
   next: Next,
   ctx: CancellationContext,
-) => unknown | Promise<unknown>;
+) =>
+  | Result<unknown, unknown, unknown>
+  | Promise<Result<unknown, unknown, unknown>>
+  | unknown
+  | Promise<unknown>;
 
-export type Handler = Readonly<{
-  name: string;
+/**
+ * Handler<I> - Effect handler that implements an interface.
+ *
+ * Handlers match instructions by name (_tag) and provide implementations
+ * for each operation. Handler functions receive instructions and return Results.
+ *
+ * @example
+ * const httpHandler: Handler<HttpInterface> = {
+ *   name: "Http",
+ *   implements: HttpInterface,
+ *   handles: {
+ *     get: (instr, next, ctx) => ok(fetch(url, { signal: ctx.signal })),
+ *     post: (instr, next, ctx) => ok(fetch(url, { method: "POST", ... }))
+ *   }
+ * };
+ */
+export type Handler<I extends EffectInterface = EffectInterface> = Readonly<{
+  name: I["_tag"];
+  implements?: I;
   handles: Readonly<Record<string, HandlerFn>>;
   finalize?: Finalizer;
 }>;
@@ -42,6 +65,13 @@ const isInstr = (value: unknown): value is AnyInstr =>
   typeof (value as AnyInstr)._tag === "string" &&
   typeof (value as AnyInstr).kind === "string" &&
   Array.isArray((value as AnyInstr).args);
+
+const isResult = (value: unknown): value is Result<unknown, unknown, unknown> =>
+  Boolean(value) &&
+  typeof value === "object" &&
+  value !== null &&
+  ((value as Result<unknown, unknown, unknown>).tag === "Ok" ||
+    (value as Result<unknown, unknown, unknown>).tag === "Err");
 
 const isPromiseLike = <T>(value: unknown): value is PromiseLike<T> =>
   Boolean(value) && typeof (value as PromiseLike<T>).then === "function";
@@ -73,9 +103,22 @@ const resolveWithRuntime = async (
   value: unknown,
   runtime: RuntimeInstance | undefined,
 ): Promise<unknown> => {
+  // Unwrap promises
   if (isPromiseLike(value)) {
     return await resolveWithRuntime(await value, runtime);
   }
+
+  // Unwrap Results - errors halt execution
+  if (isResult(value)) {
+    if (value.tag === "Err") {
+      // Propagate errors by halting
+      throw makeHalt("Exception", value.error);
+    }
+    // Ok case - unwrap and continue resolving
+    return await resolveWithRuntime(value.value, runtime);
+  }
+
+  // Dispatch instructions through handlers
   if (isInstr(value)) {
     if (!runtime) {
       const availableStacks = runtimeStack.length > 0
@@ -90,6 +133,8 @@ const resolveWithRuntime = async (
     const dispatched = await runtime.dispatch(value);
     return await resolveWithRuntime(dispatched, runtime);
   }
+
+  // Base case - return plain values
   return value;
 };
 
@@ -227,10 +272,25 @@ export const halt = (effect: string, value: unknown): never => {
   throw makeHalt(effect, value);
 };
 
-export const resolveEff = async <T>(value: T): Promise<AwaitedReturn<T>> => {
+/**
+ * resolveResult<T> - Resolve a Result-wrapped computation with effects.
+ *
+ * This is the primary way to execute effectful computations. It unwraps:
+ * - Promises (awaits them)
+ * - Results (unwraps Ok, halts on Err)
+ * - Instructions (dispatches through handlers)
+ *
+ * @example
+ * const result = await resolveResult(Http.op.get("https://api.example.com"));
+ * // result is the unwrapped Response object
+ */
+export const resolveResult = async <T>(value: T): Promise<AwaitedReturn<T>> => {
   const runtime = runtimeStack[runtimeStack.length - 1];
   return await resolveWithRuntime(value, runtime) as AwaitedReturn<T>;
 };
+
+// Alias for backward compatibility and shorter name
+export const resolveEff = resolveResult;
 
 export const stack = (...handlers: readonly Handler[]) => ({
   run: async <A>(thunk: () => A): Promise<A> => {
@@ -410,14 +470,17 @@ const consoleCapture = (): Handler => {
       log: (instr, next, ctx) => {
         const [msg] = instr.args;
         logs.push(String(msg));
+        return ok(undefined);
       },
       warn: (instr, next, ctx) => {
         const [msg] = instr.args;
         warns.push(String(msg));
+        return ok(undefined);
       },
       error: (instr, next, ctx) => {
         const [msg] = instr.args;
         errors.push(String(msg));
+        return ok(undefined);
       },
     },
     finalize: (value, halt) => ({
@@ -432,15 +495,15 @@ const consoleLive = (sink: ConsoleRecord = console): Handler => ({
   handles: {
     log: (instr, next, ctx) => {
       sink.log?.(...instr.args);
-      return next(instr);
+      return ok(undefined);
     },
     warn: (instr, next, ctx) => {
       sink.warn?.(...instr.args);
-      return next(instr);
+      return ok(undefined);
     },
     error: (instr, next, ctx) => {
       sink.error?.(...instr.args);
-      return next(instr);
+      return ok(undefined);
     },
   },
 });
@@ -454,6 +517,7 @@ const exceptionTryCatch = (): Handler => {
         const [error] = instr.args;
         failure = error;
         halt("Exception", error);
+        return err(error); // Never reached due to halt(), but needed for type checking
       },
     },
     finalize: (value, haltState) => {
@@ -473,14 +537,16 @@ const stateWith = <S>(initial: S): Handler => {
   return {
     name: "State",
     handles: {
-      get: (instr, next, ctx) => state,
+      get: (instr, next, ctx) => ok(state),
       put: (instr, next, ctx) => {
         const [nextState] = instr.args as [S];
         state = nextState;
+        return ok(undefined);
       },
       modify: (instr, next, ctx) => {
         const [fn] = instr.args as [(s: S) => S];
         state = fn(state);
+        return ok(undefined);
       },
     },
     finalize: (value, haltState) => ({
@@ -494,15 +560,17 @@ const asyncDefault = (): Handler => ({
   name: "Async",
   handles: {
     sleep: (instr, next, ctx) =>
-      new Promise((resolve) => {
-        const [ms] = instr.args as [number];
-        const timerId = setTimeout(resolve, ms);
-        // Register cleanup to cancel the timer
-        ctx.onCancel(() => clearTimeout(timerId));
-      }),
+      ok(
+        new Promise((resolve) => {
+          const [ms] = instr.args as [number];
+          const timerId = setTimeout(resolve, ms);
+          // Register cleanup to cancel the timer
+          ctx.onCancel(() => clearTimeout(timerId));
+        }),
+      ),
     await: async (instr, next, ctx) => {
       const [p] = instr.args as [Promise<unknown>];
-      return await p;
+      return ok(await p);
     },
   },
 });
@@ -512,51 +580,55 @@ const httpDefault = (): Handler => ({
   handles: {
     get: async (instr, next, ctx) => {
       const [url, options] = instr.args as [string, RequestInit | undefined];
-      return await fetch(url, { ...options, signal: ctx.signal });
+      const response = await fetch(url, { ...options, signal: ctx.signal });
+      return ok(response);
     },
     post: async (instr, next, ctx) => {
       const [url, body, options] = instr.args as [string, unknown, RequestInit | undefined];
-      return await fetch(url, {
+      const response = await fetch(url, {
         ...options,
         method: "POST",
         body: JSON.stringify(body),
         headers: { "content-type": "application/json", ...options?.headers },
         signal: ctx.signal,
       });
+      return ok(response);
     },
     put: async (instr, next, ctx) => {
       const [url, body, options] = instr.args as [string, unknown, RequestInit | undefined];
-      return await fetch(url, {
+      const response = await fetch(url, {
         ...options,
         method: "PUT",
         body: JSON.stringify(body),
         headers: { "content-type": "application/json", ...options?.headers },
         signal: ctx.signal,
       });
+      return ok(response);
     },
     delete: async (instr, next, ctx) => {
       const [url, options] = instr.args as [string, RequestInit | undefined];
-      return await fetch(url, { ...options, method: "DELETE", signal: ctx.signal });
+      const response = await fetch(url, { ...options, method: "DELETE", signal: ctx.signal });
+      return ok(response);
     },
   },
 });
 
 type ResourceDescriptorMap = Readonly<
-  Record<string, ResourceDescriptor<unknown, unknown, unknown>>
+  Record<string, ResourceDescriptor<unknown, unknown, unknown, unknown, unknown>>
 >;
 
 const resourceScoped = (): Handler => ({
   name: "Resource",
   handles: {
-    scope: (instr, next, ctx) => {
+    scope: async (instr, next, ctx) => {
       const [rawDescriptors, body] = instr.args as [
         ResourceDescriptorMap,
-        (resources: Readonly<Record<string, unknown>>) => Eff<unknown, unknown>,
+        (resources: Readonly<Record<string, unknown>>) => Result<unknown, unknown, unknown>,
       ];
 
-      return withChildScope(async () => {
+      const value = await withChildScope(async () => {
         const entries = Object.entries(rawDescriptors) as Array<
-          [string, ResourceDescriptor<unknown, unknown, unknown>]
+          [string, ResourceDescriptor<unknown, unknown, unknown, unknown, unknown>]
         >;
         const resources: Record<string, unknown> = {};
 
@@ -568,13 +640,13 @@ const resourceScoped = (): Handler => ({
             throw new Error(`Resource descriptor "${key}" is missing release()`);
           }
 
-          const value = await resolveEff(descriptor.acquire());
+          const value = await resolveResult(descriptor.acquire());
           resources[key] = value;
           const label = descriptor.label ?? key;
 
           ctx.onCancel(async () => {
             try {
-              await resolveEff(descriptor.release(value));
+              await resolveResult(descriptor.release(value));
             } catch (error) {
               console.error(`[Resource] Cleanup error for "${label}":`, error);
             }
@@ -588,9 +660,11 @@ const resourceScoped = (): Handler => ({
           return undefined;
         }
 
-        const resultEff = body(snapshot);
-        return await resolveEff(resultEff);
+        const result = body(snapshot);
+        return await resolveResult(result);
       });
+
+      return ok(value);
     },
   },
 });

@@ -53,7 +53,7 @@ deno task test:coverage
 - ✅ Security (path traversal, input validation)
 - ✅ Functional subset linter
 
-See [TEST_COVERAGE_REPORT.md](./TEST_COVERAGE_REPORT.md) for detailed coverage analysis.
+See [TEST_COVERAGE_REPORT.md](./docs/TEST_COVERAGE_REPORT.md) for detailed coverage analysis.
 
 ## Project layout
 
@@ -75,6 +75,22 @@ typelang-repo/
 - Middleware: logger, CORS, error boundary, rate-limit, static, auth stub
 - Showcase root route renders HTMX-ready partials (`/showcase/:id`, `/showcase/:id/run`)
 - Tiny, dependency-free implementation
+
+## Configuration & security defaults
+
+- `TYPELANG_ALLOWED_ORIGINS` (comma-separated) governs which origins receive CORS headers. Omit to
+  fall back to `http://127.0.0.1:8080` and `http://localhost:8080`. You can also pass
+  `allowedOrigins` to `createServer`.
+- `TYPELANG_AUTH_TOKEN` enables bearer-token enforcement for every request (expect
+  `Authorization: Bearer <token>`). Provide a custom predicate via `ServerOptions.auth` to replace
+  this behavior.
+- `TYPELANG_TRUST_PROXY` (set to `true`/`1`) allows the rate limiter to respect `x-forwarded-for`
+  and should only be enabled behind a trusted ingress/proxy. Otherwise, client IPs are derived from
+  the TCP connection.
+- `TYPELANG_RATE_LIMIT` overrides the default 300-requests-per-minute budget enforced by
+  `withRateLimit`. You can also set `ServerOptions.rateLimitPerMinute`.
+- Static assets are streamed directly from disk with extension-based caching headers. Keep large
+  files inside `public/` so `withStatic()` can serve them efficiently.
 
 ## Typelang (minimal surface used here)
 

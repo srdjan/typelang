@@ -9,13 +9,7 @@ import {
   renderButton,
   renderCodeBlock,
 } from "../components/ui.ts";
-
-const escapeHtml = (s: string) =>
-  s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll(
-    '"',
-    "&quot;",
-  )
-    .replaceAll("'", "&#039;");
+import { escapeHtml } from "../lib/patterns.ts";
 
 type Concept = Readonly<{
   id: string;
@@ -44,7 +38,7 @@ const buildProfile = (userId: string) =>
     .let(() => fetchUser(userId))            // ctx.v1
     .let((user) => fetchPosts(user.id))       // ctx.v2
     .let((posts, ctx) => fetchFollowers((ctx!["v1"] as User).id)) // ctx.v3
-    .do((followers, ctx) => Console.op.log(\`Building profile for \${(ctx!["v1"] as User).name}\`))
+    .do((followers, ctx) => Console.log(\`Building profile for \${(ctx!["v1"] as User).name}\`))
     .return((followers, ctx) => ({
       user: ctx!["v1"] as User,
       postCount: (ctx!["v2"] as Post[]).length,

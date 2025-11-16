@@ -349,8 +349,9 @@ const server = createServer(routes, {
 
 #### 5. Resource Management (RAII)
 
-**typelang v0.3.0+** introduces automatic resource management inspired by Gleam's `use` construct and
-Rust's RAII pattern. Resources are automatically acquired and disposed via the `Resource` effect.
+**typelang v0.3.0+** introduces automatic resource management inspired by Gleam's `use` construct
+and Rust's RAII pattern. Resources are automatically acquired and disposed via the `Resource`
+effect.
 
 **Defining resources:**
 
@@ -359,9 +360,12 @@ import { defineResource } from "./typelang/mod.ts";
 
 const fileResource = (path: string) =>
   defineResource(
-    () => Deno.openSync(path, { read: true }),  // acquire
-    (file) => { file.close(); return undefined; }, // release
-    { label: `file(${path})` }
+    () => Deno.openSync(path, { read: true }), // acquire
+    (file) => {
+      file.close();
+      return undefined;
+    }, // release
+    { label: `file(${path})` },
   );
 ```
 
@@ -389,7 +393,7 @@ await stack(handlers.Resource.scope()).run(() =>
 ```typescript
 use(
   { file: () => fileResource("./logs/access.log") },
-  { db: () => dbResource("postgres://...") }
+  { db: () => dbResource("postgres://...") },
 ).in(async ({ file, db }) => {
   const request = await readRequest(file);
   await db.execute("INSERT INTO requests ...", request);
@@ -417,23 +421,23 @@ The `typelang/errors.ts` module provides standard error types and Result utiliti
 
 ```typescript
 type Result<T, E> =
-  | { tag: "Ok", value: T }
-  | { tag: "Err", error: E };
+  | { tag: "Ok"; value: T }
+  | { tag: "Err"; error: E };
 
 // Constructors
-ok(value)           // Create Ok result
-err(error)          // Create Err result
+ok(value); // Create Ok result
+err(error); // Create Err result
 
 // Type guards
-isOk(result)        // Check if Ok
-isErr(result)       // Check if Err
+isOk(result); // Check if Ok
+isErr(result); // Check if Err
 
 // Utilities
-unwrap(result)      // Extract value or throw
-unwrapOr(result, defaultValue)
-mapResult(result, f)        // Transform value
-mapError(result, f)         // Transform error
-flatMapResult(result, f)    // Monadic bind
+unwrap(result); // Extract value or throw
+unwrapOr(result, defaultValue);
+mapResult(result, f); // Transform value
+mapError(result, f); // Transform error
+flatMapResult(result, f); // Monadic bind
 ```
 
 **Pattern matching with `match()`:**
@@ -482,7 +486,8 @@ pipe(
 - **Effect tests** (`effects_test.ts`): Console, State, Exception, Async, Http effects
 - **Resource tests** (`resource_test.ts`): RAII scopes, cleanup ordering, cancellation
 - **Cancellation tests** (`cancellation_test.ts`): Signal propagation, cleanup behavior
-- **Server tests** (`router_test.ts`, `middleware_test.ts`, `http_test.ts`): HTTP routing, middleware composition
+- **Server tests** (`router_test.ts`, `middleware_test.ts`, `http_test.ts`): HTTP routing,
+  middleware composition
 - **Integration tests** (`app_routes_test.ts`, `showcase_test.ts`): Full application routes
 - **Security tests**: Path traversal, input validation
 - **Subset linter tests** (`subset_test.ts`): Functional subset enforcement
@@ -497,6 +502,7 @@ Deno.test("handler should...", async () => {
 ```
 
 Run tests with:
+
 - `deno task test` - run all tests
 - `deno task test:watch` - auto-rerun on file changes
 - `deno task test:coverage` - generate coverage report
@@ -556,9 +562,9 @@ Run tests with:
    ```typescript
    const myResource = (config: Config) =>
      defineResource(
-       () => acquireResource(config),    // Acquisition
-       (resource) => resource.cleanup(),  // Release
-       { label: `my-resource(${config.id})` }
+       () => acquireResource(config), // Acquisition
+       (resource) => resource.cleanup(), // Release
+       { label: `my-resource(${config.id})` },
      );
    ```
 
@@ -588,6 +594,7 @@ Run tests with:
 All configuration in `deno.jsonc`:
 
 **Tasks:**
+
 - `dev` - Start development server
 - `test` - Run all tests
 - `test:watch` - Run tests in watch mode
@@ -597,15 +604,19 @@ All configuration in `deno.jsonc`:
 - `setup-hooks` - Configure git hooks
 
 **Formatter:**
+
 - 2-space indent
 - 100 char line width
 - Semicolons required
 
 **Linter:**
+
 - Recommended rules enabled
-- Excludes: no-import-prefix, ban-types, no-explicit-any, require-await, no-unused-vars, prefer-const
+- Excludes: no-import-prefix, ban-types, no-explicit-any, require-await, no-unused-vars,
+  prefer-const
 
 **Imports:**
+
 - `@srdjan/bluesky-bot` - External JSR dependency (if used)
 
 No build step required - Deno runs TypeScript directly.
@@ -613,6 +624,7 @@ No build step required - Deno runs TypeScript directly.
 ## Git Workflow
 
 **Pre-commit hook** (`.githooks/pre-commit`) automatically runs:
+
 1. Format check (`deno fmt --check`)
 2. Lint check (`deno task lint`)
 3. All tests (`deno test`)
@@ -625,6 +637,7 @@ Enable hooks with: `deno task setup-hooks`
 ## Documentation
 
 **Key documentation files:**
+
 - `CLAUDE.md` - This file: comprehensive guide for AI assistants
 - `README.md` - User-facing project overview
 - `TODO.md` - Planned features and migration tasks
@@ -638,6 +651,7 @@ Enable hooks with: `deno task setup-hooks`
 ## Version History
 
 **v0.3.0+** (Current)
+
 - Resource effect with RAII-style automatic cleanup
 - Enhanced cancellation with CancellationContext (breaking change)
 - Standard error types and Result utilities
@@ -645,6 +659,7 @@ Enable hooks with: `deno task setup-hooks`
 - Git hooks for automated quality checks
 
 **v0.2.x**
+
 - Basic algebraic effects runtime
 - HTTP server with middleware composition
 - Functional subset linter

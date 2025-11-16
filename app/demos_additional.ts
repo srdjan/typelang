@@ -2,29 +2,9 @@
 // Additional demo programs to showcase more typelang features.
 
 import { Async, Console, Exception, State } from "../typelang/effects.ts";
-import { handlers, match, par, pipe, seq, stack } from "../typelang/mod.ts";
+import { handlers, match, ok, par, pipe, seq, stack } from "../typelang/mod.ts";
 import type { DemoArtifact, DemoEvent, DemoRun, ShowcaseDemo } from "./showcase.ts";
-
-type BoolTag =
-  | Readonly<{ tag: "True" }>
-  | Readonly<{ tag: "False" }>;
-
-const boolTags: readonly BoolTag[] = [
-  { tag: "False" } as const,
-  { tag: "True" } as const,
-] as const;
-
-const toBoolTag = (flag: boolean): BoolTag => boolTags[Number(flag)];
-
-type Option<T> =
-  | Readonly<{ tag: "Some"; value: T }>
-  | Readonly<{ tag: "None" }>;
-
-const option = <T>(value: T | null | undefined): Option<T> =>
-  [
-    { tag: "None" } as const,
-    { tag: "Some", value: value as T } as const,
-  ][Number(value !== null && value !== undefined)];
+import { type BoolTag, type Option, option, toBoolTag } from "./lib/patterns.ts";
 
 const jsonStringify = (value: unknown): string => JSON.stringify(value, null, 2) ?? String(value);
 
@@ -49,10 +29,10 @@ type NormalizedRun = Readonly<{
 
 const helloProgram = () =>
   seq()
-    .tap(() => Console.op.log("Starting hello program"))
-    .let(() => 42)
-    .tap((count) => Console.op.log(`The answer is ${count}`))
-    .then((count) => ({ message: "Hello from effects!", count }))
+    .tap(() => Console.log("Starting hello program"))
+    .let(() => ok(42))
+    .tap((count) => Console.log(`The answer is ${count}`))
+    .then((count) => ok({ message: "Hello from effects!", count }))
     .value();
 
 const presentHello = (run: NormalizedRun): DemoRun =>
@@ -63,7 +43,7 @@ const presentHello = (run: NormalizedRun): DemoRun =>
         status: "ok",
         headline: result.message,
         detail: [
-          "`Console.op.log()` pushes every message through the handler stack.",
+          "`Console.log()` pushes every message through the handler stack.",
           "`seq()` separates effectful `.do()` steps from value bindings.",
         ],
         artifacts: [
@@ -114,18 +94,18 @@ const joinWithComma = (names: readonly string[]): string => names.join(", ");
 
 const pipeProgram = () =>
   seq()
-    .let(() => users)
-    .tap(() => Console.op.log(`Processing ${users.length} users`))
+    .let(() => ok(users))
+    .tap(() => Console.log(`Processing ${users.length} users`))
     .then((users) =>
-      pipe(
+      ok(pipe(
         users,
         filterActive,
         extractNames,
         toUpperCase,
         joinWithComma,
-      )
+      ))
     )
-    .tap((result) => Console.op.log(`Active users: ${result}`))
+    .tap((result) => Console.log(`Active users: ${result}`))
     .value();
 
 const presentPipe = (run: NormalizedRun): DemoRun =>
@@ -187,15 +167,15 @@ const statusMessage = (status: Status): string =>
 
 const matchProgram = () =>
   seq()
-    .let(() => statuses)
-    .tap(() => Console.op.log("Processing statuses"))
+    .let(() => ok(statuses))
+    .tap(() => Console.log("Processing statuses"))
     .then((statuses) =>
-      pipe(
+      ok(pipe(
         statuses,
         (items) => items.map(statusMessage),
-      )
+      ))
     )
-    .tap((messages) => Console.op.log(`Processed ${messages.length} statuses`))
+    .tap((messages) => Console.log(`Processed ${messages.length} statuses`))
     .value();
 
 const presentMatch = (run: NormalizedRun): DemoRun =>
@@ -268,11 +248,11 @@ const lightLabel = (light: Light): string =>
 const stateMachineProgram = () =>
   seq()
     .let(() => State.get<Light>())
-    .tap((current) => Console.op.log(`Current: ${lightLabel(current)}`))
-    .then((current) => nextLight(current))
+    .tap((current) => Console.log(`Current: ${lightLabel(current)}`))
+    .then((current) => ok(nextLight(current)))
     .tap((next) => State.put(next))
-    .tap((next) => Console.op.log(`Next: ${lightLabel(next)}`))
-    .return((next, ctx) => ({ previous: ctx!["v1"] as Light, current: next }));
+    .tap((next) => Console.log(`Next: ${lightLabel(next)}`))
+    .return((next, ctx) => ok({ previous: ctx!["v1"] as Light, current: next }));
 
 const presentStateMachine = (run: NormalizedRun): DemoRun =>
   match(run.outcome, {
@@ -323,17 +303,17 @@ const tasks: readonly Task[] = [
 
 const runTask = (task: Task) =>
   seq()
-    .tap(() => Console.op.log(`[${task.name}] Starting...`))
-    .tap(() => Async.op.sleep(task.durationMs))
-    .tap(() => Console.op.log(`[${task.name}] Completed`))
-    .then(() => ({ id: task.id, name: task.name, status: "done" as const }))
+    .tap(() => Console.log(`[${task.name}] Starting...`))
+    .tap(() => Async.sleep(task.durationMs))
+    .tap(() => Console.log(`[${task.name}] Completed`))
+    .then(() => ok({ id: task.id, name: task.name, status: "done" as const }))
     .value();
 
 const asyncMapProgram = () =>
   seq()
-    .tap(() => Console.op.log("Starting parallel tasks"))
+    .tap(() => Console.log("Starting parallel tasks"))
     .let(() => par.map(tasks, runTask))
-    .tap((results) => Console.op.log(`Completed ${results.length} tasks`))
+    .tap((results) => Console.log(`Completed ${results.length} tasks`))
     .value();
 
 const presentAsyncMap = (run: NormalizedRun): DemoRun =>
@@ -384,17 +364,17 @@ const competitors: readonly Competitor[] = [
 
 const compete = (competitor: Competitor) =>
   seq()
-    .tap(() => Console.op.log(`${competitor.name} started (${competitor.speed}ms)`))
-    .tap(() => Async.op.sleep(competitor.speed))
-    .tap(() => Console.op.log(`${competitor.name} finished!`))
-    .then(() => competitor)
+    .tap(() => Console.log(`${competitor.name} started (${competitor.speed}ms)`))
+    .tap(() => Async.sleep(competitor.speed))
+    .tap(() => Console.log(`${competitor.name} finished!`))
+    .then(() => ok(competitor))
     .value();
 
 const raceProgram = () =>
   seq()
-    .tap(() => Console.op.log("Race starting..."))
+    .tap(() => Console.log("Race starting..."))
     .let(() => par.race(competitors.map((c) => () => compete(c))))
-    .tap((winner) => Console.op.log(`Winner: ${winner.name}!`))
+    .tap((winner) => Console.log(`Winner: ${winner.name}!`))
     .value();
 
 const presentRace = (run: NormalizedRun): DemoRun =>
@@ -448,9 +428,9 @@ export const additionalDemos: readonly ShowcaseDemo[] = [
     effectHandlers: ["Console.capture()", "Exception.tryCatch()"],
     code: `const hello = () =>
   seq()
-    .tap(() => Console.op.log("Starting"))
+    .tap(() => Console.log("Starting"))
     .let(() => 42)
-    .tap((count) => Console.op.log(\`Answer: \${count}\`))
+    .tap((count) => Console.log(\`Answer: \${count}\`))
     .then((count) => ({message: "Hello!", count}))
     .value();`,
     state: null,
@@ -515,10 +495,10 @@ export const additionalDemos: readonly ShowcaseDemo[] = [
     code: `const program = () =>
   seq()
     .let(() => State.get<Light>()) // ctx.v1
-    .tap((current) => Console.op.log(\`Current: \${lightLabel(current)}\`))
+    .tap((current) => Console.log(\`Current: \${lightLabel(current)}\`))
     .then((current) => nextLight(current))
     .tap((next) => State.put(next))
-    .tap((next) => Console.op.log(\`Next: \${lightLabel(next)}\`))
+    .tap((next) => Console.log(\`Next: \${lightLabel(next)}\`))
     .return((next, ctx) => ({ previous: ctx!["v1"] as Light, current: next }));`,
     state: { initial: initialLight, label: "Traffic Light" },
     usesAsync: false,

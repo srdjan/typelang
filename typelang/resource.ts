@@ -1,8 +1,9 @@
 // typelang/resource.ts
 // Resource Acquisition Is Initialization helpers built on top of the Resource effect.
 
-import { Resource, type ResourceSpec } from "./effects.ts";
-import { Capability, Combine, Eff } from "./types.ts";
+import { Resource } from "./effects.ts";
+import { type Result } from "./errors.ts";
+import { type Combine } from "./interfaces.ts";
 
 type UnionToIntersection<U> = (U extends unknown ? (arg: U) => void : never) extends
   (arg: infer I) => void ? I
@@ -14,22 +15,26 @@ type Simplify<T> = { [K in keyof T]: T[K] } & {};
 
 export type ResourceDescriptor<
   Value,
-  AcquireCaps,
-  ReleaseCaps,
+  AcquireError,
+  AcquireEffects,
+  ReleaseError,
+  ReleaseEffects,
 > = Readonly<{
-  readonly acquire: () => Eff<Value, AcquireCaps>;
-  readonly release: (resource: Value) => Eff<void, ReleaseCaps>;
+  readonly acquire: () => Result<Value, AcquireError, AcquireEffects>;
+  readonly release: (resource: Value) => Result<void, ReleaseError, ReleaseEffects>;
   readonly label?: string;
 }>;
 
 export type ResourceBlueprint<
   Value,
-  AcquireCaps,
-  ReleaseCaps,
-> = () => ResourceDescriptor<Value, AcquireCaps, ReleaseCaps>;
+  AcquireError,
+  AcquireEffects,
+  ReleaseError,
+  ReleaseEffects,
+> = () => ResourceDescriptor<Value, AcquireError, AcquireEffects, ReleaseError, ReleaseEffects>;
 
-type AnyDescriptor = ResourceDescriptor<any, unknown, unknown>;
-type AnyBlueprint = ResourceBlueprint<any, unknown, unknown>;
+type AnyDescriptor = ResourceDescriptor<any, unknown, unknown, unknown, unknown>;
+type AnyBlueprint = ResourceBlueprint<any, unknown, unknown, unknown, unknown>;
 
 type BlueprintRecord = Readonly<Record<string, AnyBlueprint>>;
 
@@ -41,9 +46,11 @@ type DescriptorMap<Providers> = Simplify<
   {
     readonly [K in keyof Providers]: Providers[K] extends ResourceBlueprint<
       infer Value,
-      infer AcquireCaps,
-      infer ReleaseCaps
-    > ? ResourceDescriptor<Value, AcquireCaps, ReleaseCaps>
+      infer AcquireError,
+      infer AcquireEffects,
+      infer ReleaseError,
+      infer ReleaseEffects
+    > ? ResourceDescriptor<Value, AcquireError, AcquireEffects, ReleaseError, ReleaseEffects>
       : never;
   }
 >;
@@ -52,21 +59,23 @@ type ResourceValues<Descriptors> = {
   readonly [K in keyof Descriptors]: Descriptors[K] extends ResourceDescriptor<
     infer Value,
     unknown,
+    unknown,
+    unknown,
     unknown
   > ? Value
     : never;
 };
 
-type ResourceCaps<Descriptors> = IntersectionOrEmpty<
+type ResourceEffects<Descriptors> = IntersectionOrEmpty<
   Descriptors[keyof Descriptors] extends ResourceDescriptor<
     any,
-    infer AcquireCaps,
-    infer ReleaseCaps
-  > ? Combine<AcquireCaps, ReleaseCaps>
+    any,
+    infer AcquireEffects,
+    any,
+    infer ReleaseEffects
+  > ? Combine<AcquireEffects, ReleaseEffects>
     : never
 >;
-
-type ResourceCapability = Capability<"Resource", ResourceSpec>;
 
 const mergeBlueprints = <Groups extends readonly BlueprintRecord[]>(
   groups: Groups,
@@ -109,13 +118,15 @@ const buildDescriptors = (
 
 export const defineResource = <
   Value,
-  AcquireCaps,
-  ReleaseCaps,
+  AcquireError,
+  AcquireEffects,
+  ReleaseError,
+  ReleaseEffects,
 >(
-  acquire: () => Eff<Value, AcquireCaps>,
-  release: (resource: Value) => Eff<void, ReleaseCaps>,
+  acquire: () => Result<Value, AcquireError, AcquireEffects>,
+  release: (resource: Value) => Result<void, ReleaseError, ReleaseEffects>,
   options: Readonly<{ label?: string }> = {},
-): ResourceDescriptor<Value, AcquireCaps, ReleaseCaps> =>
+): ResourceDescriptor<Value, AcquireError, AcquireEffects, ReleaseError, ReleaseEffects> =>
   Object.freeze({
     acquire,
     release,
@@ -130,22 +141,30 @@ export const use = <
   type ProviderMap = MergeBlueprintRecords<Groups>;
   type Descriptors = DescriptorMap<ProviderMap>;
   type Values = ResourceValues<Descriptors>;
-  type Caps = ResourceCaps<Descriptors>;
-  type ScopeCaps = Combine<ResourceCapability, Caps>;
+  type Effects = ResourceEffects<Descriptors>;
 
   return {
-    in: <Result, BodyCaps>(
-      body: (resources: Readonly<Values>) => Eff<Result, BodyCaps>,
-    ): Eff<Result, Combine<ScopeCaps, BodyCaps>> => {
+    in: <ResultValue, ResultError, BodyEffects>(
+      body: (
+        resources: Readonly<Values>,
+      ) =>
+        | Result<ResultValue, ResultError, BodyEffects>
+        | Promise<Result<ResultValue, ResultError, BodyEffects>>,
+    ): Result<ResultValue, ResultError, Combine<Effects, BodyEffects>> => {
       const descriptors = buildDescriptors(providers);
       const scopeBody =
         ((resources: Readonly<Record<string, unknown>>) => body(resources as Readonly<Values>)) as (
           resources: Readonly<Record<string, unknown>>,
-        ) => Eff<Result, BodyCaps>;
+        ) =>
+          | Result<ResultValue, ResultError, BodyEffects>
+          | Promise<
+            Result<ResultValue, ResultError, BodyEffects>
+          >;
 
-      return Resource.op.scope(descriptors, scopeBody) as unknown as Eff<
-        Result,
-        Combine<ScopeCaps, BodyCaps>
+      return Resource.scope(descriptors, scopeBody) as unknown as Result<
+        ResultValue,
+        ResultError,
+        Combine<Effects, BodyEffects>
       >;
     },
   };

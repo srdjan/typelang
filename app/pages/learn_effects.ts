@@ -9,13 +9,7 @@ import {
   renderButton,
   renderCodeBlock,
 } from "../components/ui.ts";
-
-const escapeHtml = (s: string) =>
-  s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll(
-    '"',
-    "&quot;",
-  )
-    .replaceAll("'", "&#039;");
+import { escapeHtml } from "../lib/patterns.ts";
 
 type EffectConcept = Readonly<{
   id: string;
@@ -49,11 +43,11 @@ function processUser(id: string) {
 // typelang (explicit effects)
 const processUser = (id: string) =>
   seq()
-    .do(() => Console.op.log(\`Processing \${id}\`))
+    .do(() => Console.log(\`Processing \${id}\`))
     .let(() => fetchUser(id))
     .let((user) =>
       match(option(user), {
-        None: () => Exception.op.fail({tag: "NotFound", id}),
+        None: () => Exception.fail({tag: "NotFound", id}),
         Some: ({value}) => value,
       })
     )
@@ -71,7 +65,7 @@ type ProcessUserCaps = Readonly<{
       "Effects are tracked in the type signature as Eff<A, Caps>",
       "A is the return value, Caps are the required capabilities (use record syntax)",
       "Record-based capabilities: { console: Console; http: Http } are self-documenting",
-      "Operations like Console.op.log() return Eff, not void",
+      "Operations like Console.log() return Eff, not void",
       "Handlers interpret effects at runtime—swap handlers for different contexts",
       "Your code stays pure; side effects happen in handlers",
     ],
@@ -134,8 +128,8 @@ const recordRequest = (path: string, durationMs: number) =>
 // Console effect
 const greet = (name: string) =>
   seq()
-    .do(() => Console.op.log(\`Hello, \${name}!\`))
-    .do(() => Console.op.warn("This is a warning"))
+    .do(() => Console.log(\`Hello, \${name}!\`))
+    .do(() => Console.warn("This is a warning"))
     .return(() => \`Greeted \${name}\`);
 
 // State effect
@@ -151,23 +145,23 @@ const divide = (a: number, b: number) =>
   seq()
     .when(
       () => b === 0,
-      () => Exception.op.fail({tag: "DivisionByZero"}),
+      () => Exception.fail({tag: "DivisionByZero"}),
     )
     .return(() => a / b);
 
 // Async effect
 const delay = (ms: number, message: string) =>
   seq()
-    .do(() => Async.op.sleep(ms))
-    .do(() => Console.op.log(message))
+    .do(() => Async.sleep(ms))
+    .do(() => Console.log(message))
     .return(() => message);
 
 // Combine multiple effects
 const complexProgram = () =>
   seq()
     .let(() => State.get<{count: number}>())
-    .do((state) => Console.op.log(\`Count: \${state.count}\`))
-    .do(() => Async.op.sleep(100))
+    .do((state) => Console.log(\`Count: \${state.count}\`))
+    .do(() => Async.sleep(100))
     .let((_, ctx) => ({count: (ctx!["v1"] as any).count + 1}))
     .do((next) => State.put(next))
     .return((next) => next);`,
@@ -213,7 +207,7 @@ type UserCacheCaps = Readonly<{
 const fetchAndCacheUsers = (): Eff<readonly User[], UserCacheCaps> =>
   seq()
     // Console effect
-    .do(() => Console.op.log("Fetching users..."))
+    .do(() => Console.log("Fetching users..."))
 
     // Async effect (parallel fetch)
     .let(() =>
@@ -235,12 +229,12 @@ const fetchAndCacheUsers = (): Eff<readonly User[], UserCacheCaps> =>
     // Exception effect (validate)
     .when(
       (allUsers) => allUsers.length === 0,
-      () => Exception.op.fail({tag: "NoUsers"}),
+      () => Exception.fail({tag: "NoUsers"}),
     )
 
     // Console effect (success)
     .do((allUsers) =>
-      Console.op.log(\`Cached \${allUsers.length} users\`)
+      Console.log(\`Cached \${allUsers.length} users\`)
     )
 
     .return((allUsers) => allUsers);

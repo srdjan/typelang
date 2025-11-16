@@ -2,29 +2,9 @@
 // Declarative showcase programs highlighting typelang capabilities.
 
 import { Async, Console, Exception, State } from "../typelang/effects.ts";
-import { handlers, match, par, pipe, seq, stack } from "../typelang/mod.ts";
-import type { Eff, Handler } from "../typelang/mod.ts";
-
-type BoolTag =
-  | Readonly<{ tag: "True" }>
-  | Readonly<{ tag: "False" }>;
-
-const boolTags: readonly BoolTag[] = [
-  { tag: "False" } as const,
-  { tag: "True" } as const,
-] as const;
-
-const toBoolTag = (flag: boolean): BoolTag => boolTags[Number(flag)];
-
-type Option<T> =
-  | Readonly<{ tag: "Some"; value: T }>
-  | Readonly<{ tag: "None" }>;
-
-const option = <T>(value: T | null | undefined): Option<T> =>
-  [
-    { tag: "None" } as const,
-    { tag: "Some", value: value as T } as const,
-  ][Number(value !== null && value !== undefined)];
+import { handlers, match, ok, par, pipe, seq, stack } from "../typelang/mod.ts";
+import type { Handler, Result } from "../typelang/mod.ts";
+import { type BoolTag, type Option, option, toBoolTag } from "./lib/patterns.ts";
 
 const jsonStringify = (value: unknown): string => JSON.stringify(value, null, 2) ?? String(value);
 
@@ -116,13 +96,13 @@ const stageLabel = (stage: Stage): string =>
     Release: () => "Release",
   });
 
-const nextStage = (stage: Stage): Stage =>
+const nextStage = (stage: Stage): Result<Stage, unknown, { exception: typeof Exception.spec }> =>
   match(stage, {
-    Draft: () => stageReview,
-    Review: () => stageIntegrate,
-    Integrate: () => stageRelease,
+    Draft: () => ok(stageReview),
+    Review: () => ok(stageIntegrate),
+    Integrate: () => ok(stageRelease),
     Release: () =>
-      Exception.op.fail({
+      Exception.fail({
         tag: "AlreadyReleased",
         message: "Workflow is already complete",
       }),
@@ -137,26 +117,29 @@ const appendEvent = (
 // Order-independent, self-documenting, no need for composite type definitions
 type WorkflowCaps = Readonly<{
   console: typeof Console.spec;
-  state: ReturnType<typeof State.spec<WorkflowState>>;
+  state: typeof State.spec;
   exception: typeof Exception.spec;
 }>;
 
-const workflowProgram = (): Eff<
+const workflowProgram = (): Result<
   Readonly<{ stage: Stage; history: readonly StageEvent[] }>,
+  unknown,
   WorkflowCaps
 > =>
   seq()
     .let(() => State.get<WorkflowState>())
-    .then((state) => state.stage)
+    .then((state) => ok(state.stage))
     .then((stage) => nextStage(stage))
-    .let((next) => next)
-    .then((next) => ({
-      tag: "StageChanged" as const,
-      stage: next,
-      note: stageNote(next),
-    }))
-    .let((event) => event)
-    .tap((event) => Console.op.log(`Stage → ${stageLabel(event.stage)}`))
+    .let((next) => ok(next))
+    .then((next) =>
+      ok({
+        tag: "StageChanged" as const,
+        stage: next,
+        note: stageNote(next),
+      })
+    )
+    .let((event) => ok(event))
+    .tap((event) => Console.log(`Stage → ${stageLabel(event.stage)}`))
     .do((event, ctx) => {
       const state = ctx!["v1"] as WorkflowState;
       const history = appendEvent(state.history, event);
@@ -165,7 +148,7 @@ const workflowProgram = (): Eff<
     .return((event, ctx) => {
       const state = ctx!["v1"] as WorkflowState;
       const history = appendEvent(state.history, event);
-      return { stage: event.stage, history };
+      return ok({ stage: event.stage, history });
     });
 
 const presentWorkflow = (run: NormalizedRun): DemoRun =>
@@ -228,17 +211,18 @@ type ParallelTaskCaps = Readonly<{
   async: typeof Async.spec;
 }>;
 
-const runTask = (descriptor: TaskDescriptor) =>
+const runTask = (descriptor: TaskDescriptor): Result<TaskResult, never, ParallelTaskCaps> =>
   seq()
-    .do(() => Console.op.log(`[${descriptor.label}] scheduled`))
-    .do(() => Async.op.sleep(descriptor.delay))
-    .do(() => Console.op.log(`[${descriptor.label}] completed`))
-    .return(() => ({
-      id: descriptor.id,
-      label: descriptor.label,
-      delay: descriptor.delay,
-    }));
-// Inferred type: Eff<TaskResult, ParallelTaskCaps>
+    .do(() => Console.log(`[${descriptor.label}] scheduled`))
+    .do(() => Async.sleep(descriptor.delay))
+    .do(() => Console.log(`[${descriptor.label}] completed`))
+    .return(() =>
+      ok({
+        id: descriptor.id,
+        label: descriptor.label,
+        delay: descriptor.delay,
+      })
+    );
 
 type ParallelSnapshot = Readonly<{
   tasks: readonly TaskResult[];
@@ -263,25 +247,29 @@ const parallelProgram = () =>
       })
     )
     .then((results) =>
-      pipe(parallelDescriptors, (descriptors) =>
-        descriptors.map((descriptor) => results[descriptor.id]))
+      ok(pipe(parallelDescriptors, (descriptors) =>
+        descriptors.map((descriptor) =>
+          results[descriptor.id]
+        )))
     )
-    .then((tasks) => ({
-      tasks,
-      fastest: pipe(
+    .then((tasks) =>
+      ok({
         tasks,
-        (ts) =>
-          ts.reduce(
-            (best, current) =>
-              match(toBoolTag(current.delay < best.delay), {
-                True: () =>
-                  current,
-                False: () => best,
-              }),
-            tasks[0],
-          ),
-      ),
-    }))
+        fastest: pipe(
+          tasks,
+          (ts) =>
+            ts.reduce(
+              (best, current) =>
+                match(toBoolTag(current.delay < best.delay), {
+                  True: () =>
+                    current,
+                  False: () => best,
+                }),
+              tasks[0],
+            ),
+        ),
+      })
+    )
     .value();
 
 const presentParallel = (run: NormalizedRun): DemoRun =>
@@ -383,15 +371,15 @@ type FeatureMode =
 // Helper function with Exception capability for validation
 const ensureFlag = (
   value: string | undefined,
-): Eff<FeatureMode, Readonly<{ exception: typeof Exception.spec }>> =>
+): Result<FeatureMode, ConfigError, Readonly<{ exception: typeof Exception.spec }>> =>
   match(presence(value), {
-    Missing: () => Exception.op.fail({ tag: "MissingFlag" }),
+    Missing: () => Exception.fail({ tag: "MissingFlag" }),
     Present: ({ value: raw }) =>
       match(identifyFlag(raw), {
-        Stable: () => ({ tag: "StableMode" } as const),
-        Beta: () => ({ tag: "BetaMode" } as const),
+        Stable: () => ok({ tag: "StableMode" } as const),
+        Beta: () => ok({ tag: "BetaMode" } as const),
         Other: ({ value: unexpected }) =>
-          Exception.op.fail({
+          Exception.fail({
             tag: "UnsupportedFlag",
             value: unexpected,
           }),
@@ -410,15 +398,15 @@ const identifyThrottle = (value: string): Throttle =>
 
 const ensureThrottle = (
   value: string | undefined,
-): Eff<Throttle, Readonly<{ exception: typeof Exception.spec }>> =>
+): Result<Throttle, ConfigError, Readonly<{ exception: typeof Exception.spec }>> =>
   match(presence(value), {
-    Missing: () => ({ tag: "Balanced" } as const),
+    Missing: () => ok({ tag: "Balanced" } as const),
     Present: ({ value: raw }) =>
       match(identifyThrottle(raw), {
-        Gentle: () => ({ tag: "Gentle" } as const),
-        Balanced: () => ({ tag: "Balanced" } as const),
+        Gentle: () => ok({ tag: "Gentle" } as const),
+        Balanced: () => ok({ tag: "Balanced" } as const),
         Burst: () =>
-          Exception.op.fail({
+          Exception.fail({
             tag: "UnsupportedThrottle",
             value: raw,
           }),
@@ -437,17 +425,19 @@ type ConfigProgramCaps = Readonly<{
   exception: typeof Exception.spec;
 }>;
 
-const configProgram = (): Eff<ConfigSnapshot, ConfigProgramCaps> =>
+const configProgram = (): Result<ConfigSnapshot, ConfigError, ConfigProgramCaps> =>
   seq()
-    .let(() => configInput)
-    .tap((input) => Console.op.log(`Validating ${input.label}`))
+    .let(() => ok(configInput))
+    .tap((input) => Console.log(`Validating ${input.label}`))
     .let((input) => ensureFlag(input.featureFlag))
     .let((_, ctx) => ensureThrottle((ctx!["v1"] as ConfigInput).throttle))
-    .return((throttle, ctx) => ({
-      feature: ctx!["v2"] as FeatureMode,
-      throttle,
-      label: (ctx!["v1"] as ConfigInput).label,
-    }));
+    .return((throttle, ctx) =>
+      ok({
+        feature: ctx!["v2"] as FeatureMode,
+        throttle,
+        label: (ctx!["v1"] as ConfigInput).label,
+      })
+    );
 
 const modeLabel = (mode: FeatureMode): string =>
   match(mode, {
@@ -537,7 +527,7 @@ const workflow = (): Eff<WorkflowSnapshot, WorkflowCaps> =>
     .let((next) => next) // ctx.v2
     .then((next) => ({ stage: next, note: stageNote(next) }))
     .let((event) => event) // ctx.v3
-    .tap((event) => Console.op.log(\`Stage → \${stageLabel(event.stage)}\`))
+    .tap((event) => Console.log(\`Stage → \${stageLabel(event.stage)}\`))
     .do((event, ctx) => {
       const state = ctx!["v1"] as WorkflowState;
       const history = appendEvent(state.history, event);
@@ -619,7 +609,7 @@ type ConfigProgramCaps = Readonly<{
 const config = (): Eff<ConfigSnapshot, ConfigProgramCaps> =>
   seq()
     .let(() => configInput) // ctx.v1
-    .tap((input) => Console.op.log(\`Validating \${input.label}\`))
+    .tap((input) => Console.log(\`Validating \${input.label}\`))
     .let((input) => ensureFlag(input.featureFlag)) // ctx.v2
     .let((_, ctx) => ensureThrottle((ctx!["v1"] as ConfigInput).throttle)) // ctx.v3
     .return((throttle, ctx) => ({

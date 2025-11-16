@@ -1,5 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { handlers, par, seq, stack } from "./mod.ts";
+import { handlers, ok, par, seq, stack } from "./mod.ts";
 import { Console, Exception, State } from "./effects.ts";
 
 type Result<T, E = unknown> = { readonly tag: "Ok"; readonly value: T } | {
@@ -20,9 +20,9 @@ Deno.test("console capture collects logs and wraps result", async () => {
     handlers.Exception.tryCatch(),
   ).run(() =>
     seq()
-      .do(() => Console.op.log("hello"))
-      .do(() => Console.op.error("warned"))
-      .return(() => "ok")
+      .do(() => Console.log("hello"))
+      .do(() => Console.error("warned"))
+      .return(() => ok("ok"))
   ) as unknown as Captured<string>;
 
   assertEquals(outcome.logs, ["hello"]);
@@ -39,8 +39,8 @@ Deno.test("exception handler captures failures", async () => {
     handlers.Exception.tryCatch(),
   ).run(() =>
     seq()
-      .do(() => Exception.op.fail({ reason: "boom" }))
-      .return(() => "unreachable")
+      .do(() => Exception.fail({ reason: "boom" }))
+      .return(() => ok("unreachable"))
   ) as unknown as Result<string, { reason: string }>;
 
   assertEquals(outcome, { tag: "Err", error: { reason: "boom" } });
@@ -54,7 +54,7 @@ Deno.test("state handler tracks mutations immutably", async () => {
     seq()
       .tap(() => State.modify<{ count: number }>((s) => ({ count: s.count + 1 })))
       .let(() => State.get<{ count: number }>())
-      .then((state) => state.count)
+      .then((state) => ok(state.count))
       .value()
   ) as unknown as WithState<number, { count: number }>;
 
@@ -71,8 +71,8 @@ Deno.test("par helpers compose results", async () => {
     handlers.Exception.tryCatch(),
   ).run(() =>
     par.all({
-      a: () => seq().return(() => 1),
-      b: () => seq().return(() => 2),
+      a: () => seq().return(() => ok(1)),
+      b: () => seq().return(() => ok(2)),
     })
   ) as unknown as Captured<{ readonly a: number; readonly b: number }>;
 
@@ -86,7 +86,9 @@ Deno.test("par helpers compose results", async () => {
 Deno.test("par.map resolves concurrent tasks", async () => {
   const outcome = await stack(
     handlers.Exception.tryCatch(),
-  ).run(() => par.map([1, 2, 3] as const, (n) => seq().return(() => n * 2))) as unknown as Result<
+  ).run(() =>
+    par.map([1, 2, 3] as const, (n) => seq().return(() => ok(n * 2)))
+  ) as unknown as Result<
     readonly number[]
   >;
 
@@ -101,8 +103,8 @@ Deno.test("par.race returns first completed task", async () => {
     handlers.Exception.tryCatch(),
   ).run(() =>
     par.race([
-      () => seq().return(() => "fast"),
-      () => seq().return(() => "slow"),
+      () => seq().return(() => ok("fast")),
+      () => seq().return(() => ok("slow")),
     ])
   ) as unknown as Result<string>;
 

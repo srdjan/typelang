@@ -15,12 +15,14 @@ const makeCtx = (
   url: string = "http://localhost/",
   method: string = "GET",
   headers: Record<string, string> = {},
+  ip: string = "127.0.0.1",
 ): RequestCtx => ({
   req: new Request(url, { method, headers }),
   url: new URL(url),
   params: {},
   query: {},
   locals: {},
+  ip,
 });
 
 Deno.test("withErrorBoundary catches thrown errors", async () => {
@@ -31,7 +33,21 @@ Deno.test("withErrorBoundary catches thrown errors", async () => {
   const res = await handler(makeCtx());
   assertEquals(res.status, 500);
   const body = await res.text();
-  assertEquals(body.includes("boom"), true);
+  assertEquals(body.includes("Internal Server Error"), true);
+  assertEquals(body.includes("boom"), false);
+});
+
+Deno.test("withErrorBoundary returns JSON when requested", async () => {
+  const handler = withErrorBoundary(() => {
+    throw new Error("boom");
+  });
+
+  const res = await handler(makeCtx("http://localhost/", "GET", { accept: "application/json" }));
+  assertEquals(res.status, 500);
+  assertEquals(res.headers.get("content-type"), "application/json; charset=utf-8");
+  const body = await res.json();
+  assertEquals(body.error, "Internal Server Error");
+  assert(body.traceId.length > 0);
 });
 
 Deno.test("withErrorBoundary passes through successful responses", async () => {
@@ -90,13 +106,13 @@ Deno.test("withRateLimit resets after time window", async () => {
 });
 
 Deno.test("withCors handles OPTIONS preflight request", async () => {
-  const handler = withCors({ origin: "*" })(() => text("ok"));
-  const ctx = makeCtx("http://localhost/", "OPTIONS");
+  const handler = withCors({ origins: ["https://example.com"] })(() => text("ok"));
+  const ctx = makeCtx("http://localhost/", "OPTIONS", { origin: "https://example.com" });
 
   const res = await handler(ctx);
 
   assertEquals(res.status, 204);
-  assertEquals(res.headers.get("access-control-allow-origin"), "*");
+  assertEquals(res.headers.get("access-control-allow-origin"), "https://example.com");
   assertEquals(
     res.headers.get("access-control-allow-methods"),
     "GET,POST,PUT,PATCH,DELETE,OPTIONS",
@@ -104,9 +120,18 @@ Deno.test("withCors handles OPTIONS preflight request", async () => {
   assert(res.headers.get("access-control-allow-headers")?.includes("content-type"));
 });
 
+Deno.test("withCors blocks disallowed origins", async () => {
+  const handler = withCors({ origins: ["https://allowed.example"] })(() => text("ok"));
+  const ctx = makeCtx("http://localhost/", "OPTIONS", { origin: "https://bad.example" });
+
+  const res = await handler(ctx);
+
+  assertEquals(res.status, 403);
+});
+
 Deno.test("withCors adds CORS headers to regular requests", async () => {
-  const handler = withCors({ origin: "https://example.com" })(() => text("ok"));
-  const ctx = makeCtx();
+  const handler = withCors({ origins: ["https://example.com"] })(() => text("ok"));
+  const ctx = makeCtx("http://localhost/", "GET", { origin: "https://example.com" });
 
   const res = await handler(ctx);
 
@@ -117,11 +142,11 @@ Deno.test("withCors adds CORS headers to regular requests", async () => {
 
 Deno.test("withCors accepts custom methods and headers", async () => {
   const handler = withCors({
-    origin: "*",
+    origins: ["*"],
     methods: "GET,POST",
     headers: "x-custom",
   })(() => text("ok"));
-  const ctx = makeCtx("http://localhost/", "OPTIONS");
+  const ctx = makeCtx("http://localhost/", "OPTIONS", { origin: "https://foo.test" });
 
   const res = await handler(ctx);
 
@@ -188,4 +213,29 @@ Deno.test("compose applies middleware in correct order", async () => {
   await handler(makeCtx());
 
   assertEquals(log, ["mw1-before", "mw2-before", "terminal", "mw2-after", "mw1-after"]);
+});
+
+Deno.test("withRateLimit ignores x-forwarded-for unless trusted", async () => {
+  const handler = withRateLimit(1)(() => text("ok"));
+  const ctx = makeCtx("http://localhost/", "GET", { "x-forwarded-for": "10.0.0.1" });
+
+  const res1 = await handler(ctx);
+  assertEquals(res1.status, 200);
+
+  const ctx2 = makeCtx("http://localhost/", "GET", { "x-forwarded-for": "10.0.0.2" });
+  const res2 = await handler(ctx2);
+  assertEquals(res2.status, 429);
+});
+
+Deno.test("withRateLimit trusts proxy header when enabled", async () => {
+  const handler = withRateLimit(1, { trustProxyHeader: true })(() => text("ok"));
+
+  const firstClient = makeCtx("http://localhost/", "GET", { "x-forwarded-for": "10.0.0.1" });
+  const secondClient = makeCtx("http://localhost/", "GET", { "x-forwarded-for": "10.0.0.2" });
+
+  const res1 = await handler(firstClient);
+  assertEquals(res1.status, 200);
+
+  const res2 = await handler(secondClient);
+  assertEquals(res2.status, 200);
 });

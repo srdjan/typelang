@@ -6,36 +6,16 @@ import type { DemoRun, ShowcaseDemo } from "./showcase.ts";
 import { additionalDemos } from "./demos_additional.ts";
 import { highlightCode } from "../server/highlight.ts";
 import { match } from "../typelang/match.ts";
-import { seq } from "../typelang/mod.ts";
+import { ok, seq } from "../typelang/mod.ts";
 import { Console, State } from "../typelang/effects.ts";
 import { renderComparisonWidgetPartial, renderLandingPage } from "./pages/landing.ts";
 import { renderLearnBasicsPage } from "./pages/learn_basics.ts";
 import { renderLearnEffectsPage } from "./pages/learn_effects.ts";
 import { renderLearnHandlersPage } from "./pages/learn_handlers.ts";
 import { renderComparisonPage } from "./pages/comparison.ts";
+import { type BoolTag, escapeHtml, type Option, option, toBoolTag } from "./lib/patterns.ts";
 
-const ok = <T>(data: T) => json({ ok: true, data });
-
-type BoolTag =
-  | Readonly<{ tag: "True" }>
-  | Readonly<{ tag: "False" }>;
-
-const boolCases = [
-  { tag: "False" } as const,
-  { tag: "True" } as const,
-] as const;
-
-const toBoolTag = (flag: boolean): BoolTag => boolCases[Number(flag)];
-
-type Option<T> =
-  | Readonly<{ tag: "None" }>
-  | Readonly<{ tag: "Some"; value: T }>;
-
-const option = <T>(value: T | null | undefined): Option<T> =>
-  [
-    { tag: "None" } as const,
-    { tag: "Some", value: value as T } as const,
-  ][Number(value !== null && value !== undefined)];
+const okResponse = <T>(data: T) => json({ ok: true, data });
 
 type Highlight = Readonly<{
   title: string;
@@ -47,26 +27,45 @@ type Highlight = Readonly<{
 const highlights: readonly Highlight[] = [
   {
     title: "Strict Functional Subset",
-    copy: "",
-    bullets: [],
+    copy:
+      "Every module runs inside the same expression-first subset enforced by the custom linter.",
+    bullets: [
+      "No implicit mutation, classes, or control statements.",
+      "Human-readable diffs—business logic reads top-to-bottom.",
+      "Guaranteed compatibility with seq()/par() orchestration.",
+    ],
     cta: { href: "/learn/basics", label: "Read the subset guide" },
   },
   {
     title: "Algebraic Effects Runtime",
-    copy: "",
-    bullets: [],
+    copy:
+      "Stack composable handlers to swap Console, State, Async, Http, and user-defined capabilities.",
+    bullets: [
+      "Abort- and cleanup-aware cancellation scopes.",
+      "Runtime checks ensure every instruction has a handler.",
+      "Handlers stay pure—return Result and let the runtime resolve it.",
+    ],
     cta: { href: "/learn/effects", label: "Explore effects walkthrough" },
   },
   {
     title: "Lightweight HTTP Server",
-    copy: "",
-    bullets: [],
+    copy:
+      "Deno-native server with zero dependencies, middleware chaining, and effect-driven route handlers.",
+    bullets: [
+      "Composable middleware: logger, CORS, auth, rate-limit, static.",
+      "Routes compile to regex once and stay in memory.",
+      "HTMX showcase renders progressively via server-side partials.",
+    ],
     cta: { href: "/comparison", label: "See the server anatomy" },
   },
   {
     title: "Type-Safe Effect Handling",
-    copy: "",
-    bullets: [],
+    copy: "Design custom interfaces with defineInterface() and interpret them with tiny handlers.",
+    bullets: [
+      "Capabilities appear explicitly in Result signatures.",
+      "swap handler stacks per request for testing or SSR.",
+      "Resource scopes clean up on success, failure, or cancel.",
+    ],
     cta: { href: "/learn/handlers", label: "Master handler design" },
   },
 ] as const;
@@ -154,15 +153,20 @@ const renderNavItem = (demo: ShowcaseDemo, activeId: string): string => {
 };
 
 const renderHighlightCard = (item: Highlight): string => {
-  const bullets = item.bullets
-    .map((bullet) => `<li>${escapeHtml(bullet)}</li>`)
-    .join("");
+  const copy = item.copy.trim().length > 0
+    ? `<p class="highlight-card__copy">${escapeHtml(item.copy)}</p>`
+    : "";
+  const bullets = item.bullets.length > 0
+    ? `<ul class="highlight-card__list">${
+      item.bullets.map((bullet) => `<li>${escapeHtml(bullet)}</li>`).join("")
+    }</ul>`
+    : "";
   return `<article class="highlight-card">
     <div>
       <h3>${escapeHtml(item.title)}</h3>
-      <p class="highlight-card__copy">${escapeHtml(item.copy)}</p>
+      ${copy}
     </div>
-    <ul class="highlight-card__list">${bullets}</ul>
+    ${bullets}
     <a class="highlight-card__cta" href="${escapeHtml(item.cta.href)}">${
     escapeHtml(item.cta.label)
   }</a>
@@ -179,20 +183,27 @@ const renderDemoCard = (demo: ShowcaseDemo, run: DemoRun | null): string => {
   const handlers = demo.effectHandlers
     .map((handler) => `<span class="pill pill--muted">${escapeHtml(handler)}</span>`)
     .join("");
-  const code = highlightCode(demo.code);
+  const code = highlightedCodeByDemo.get(demo.id) ?? highlightCode(demo.code);
   const runSection = renderRun(demo, run);
   const stateLabel = match(option(demo.state), {
     Some: ({ value }) => `<span class="pill pill--ghost">${escapeHtml(value.label)} state</span>`,
     None: () => "",
   });
+  const buttonId = `run-button-${demo.id}`;
+  const indicatorId = `${buttonId}-indicator`;
   const controls = `<button
+      id="${escapeHtml(buttonId)}"
       class="button button--ghost"
+      type="button"
       hx-post="/showcase/${demo.id}/run"
       hx-trigger="click"
       hx-target="#demo-run-${demo.id}"
       hx-swap="innerHTML"
+      hx-disabled-elt="#${escapeHtml(buttonId)}"
+      hx-indicator="#${escapeHtml(indicatorId)}"
     >
-      Run demo
+      <span class="button__spinner" id="${escapeHtml(indicatorId)}" aria-hidden="true"></span>
+      <span class="button__text">Run demo</span>
     </button>`;
 
   return `<div class="demo-card" data-demo="${escapeHtml(demo.id)}">
@@ -373,11 +384,30 @@ const renderState = (state: unknown | null): string => {
 // Merge all demos
 const allDemos = [...demos, ...additionalDemos] as const;
 
+const highlightedCodeByDemo = new Map<string, string>(
+  allDemos.map((demo) => [demo.id, highlightCode(demo.code)] as const),
+);
+
 // Create renderPage with allDemos
 const renderPage = makeRenderPage(allDemos);
 
+const demoNotFoundResponse = () =>
+  html(`<div class="demo-card__empty">Demo not found.</div>`, { status: 404 });
+
+const findDemo = (id: string): Option<ShowcaseDemo> =>
+  option(allDemos.find((demo) => demo.id === id) ?? null);
+
+const respondWithDemo = async (
+  id: string,
+  onFound: (demo: ShowcaseDemo) => Promise<Response> | Response,
+): Promise<Response> =>
+  await match(findDemo(id), {
+    Some: async ({ value }) => await onFound(value),
+    None: async () => demoNotFoundResponse(),
+  });
+
 export const routes: Routes = [
-  { method: "GET", path: "/health", handler: () => ok({ status: "ok", at: isoNow() }) },
+  { method: "GET", path: "/health", handler: () => okResponse({ status: "ok", at: isoNow() }) },
   {
     method: "GET",
     path: "/",
@@ -435,10 +465,10 @@ export const routes: Routes = [
         program: () =>
           seq()
             .let(() => State.get<{ count: number }>())
-            .let((s) => ({ count: s.count + 1 }))
-            .tap((next) => Console.op.log(`Count: ${next.count}`))
+            .let((s) => ok({ count: s.count + 1 }))
+            .tap((next) => Console.log(`Count: ${next.count}`))
             .tap((next) => State.put(next))
-            .then((next) => next.count)
+            .then((next) => ok(next.count))
             .value(),
         present: (run: NormalizedRun) => ({
           status: "ok" as const,
@@ -459,29 +489,58 @@ export const routes: Routes = [
             .join(""),
         False: () => `<li class="hero-demo__empty">No Console output this run.</li>`,
       });
+      const consoleErrors = match(toBoolTag(run.console.errors.length > 0), {
+        True: () =>
+          run.console.errors
+            .map((msg) => `<li>${escapeHtml(msg)}</li>`)
+            .join(""),
+        False: () => `<li class="hero-demo__empty">No errors captured.</li>`,
+      });
       const stateMarkup = match(option(run.state), {
         Some: ({ value }) =>
           `<pre class="hero-demo__state">${escapeHtml(JSON.stringify(value, null, 2))}</pre>`,
         None: () => `<p class="hero-demo__empty">State handler not attached.</p>`,
       });
-      return html(`<article class="hero-demo__result-card hero-demo__result-card--success">
+      const detailItems = run.detail.length > 0
+        ? `<ul>${run.detail.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`
+        : `<p class="hero-demo__empty">No additional diagnostics.</p>`;
+      const cardClass = run.status === "ok"
+        ? "hero-demo__result-card hero-demo__result-card--success"
+        : "hero-demo__result-card hero-demo__result-card--error";
+      const badgeLabel = run.status === "ok" ? `${run.elapsedMs}ms` : "Check logs";
+      const summaryCopy = run.status === "ok"
+        ? "Console + State handlers in four declarative steps."
+        : run.headline;
+      const diagnostics = run.status === "ok"
+        ? `<div class="hero-demo__result-grid">
+            <section class="hero-demo__stack">
+              <h4>Console</h4>
+              <ul>${consoleItems}</ul>
+            </section>
+            <section class="hero-demo__stack">
+              <h4>State</h4>
+              ${stateMarkup}
+            </section>
+          </div>`
+        : `<div class="hero-demo__result-grid">
+            <section class="hero-demo__stack">
+              <h4>What happened</h4>
+              ${detailItems}
+            </section>
+            <section class="hero-demo__stack">
+              <h4>Console errors</h4>
+              <ul>${consoleErrors}</ul>
+            </section>
+          </div>`;
+      return html(`<article class="${cardClass}">
         <header class="hero-demo__result-header">
           <div>
             <h3>Mini Counter Run</h3>
-            <p>Console + State handlers in four declarative steps.</p>
+            <p>${escapeHtml(summaryCopy)}</p>
           </div>
-          <span class="hero-demo__badge">${run.elapsedMs}ms</span>
+          <span class="hero-demo__badge">${escapeHtml(badgeLabel)}</span>
         </header>
-        <div class="hero-demo__result-grid">
-          <section class="hero-demo__stack">
-            <h4>Console</h4>
-            <ul>${consoleItems}</ul>
-          </section>
-          <section class="hero-demo__stack">
-            <h4>State</h4>
-            ${stateMarkup}
-          </section>
-        </div>
+        ${diagnostics}
       </article>`);
     },
   },
@@ -496,50 +555,28 @@ export const routes: Routes = [
   {
     method: "GET",
     path: "/showcase/:id",
-    handler: async ({ params }) => {
-      const selected = option(allDemos.find((d) => d.id === params.id) ?? null);
-      return await match(selected, {
-        Some: async ({ value }) => {
-          return html(renderDemoCard(value, null));
-        },
-        None: async () =>
-          html(`<div class="demo-card__empty">Demo not found.</div>`, { status: 404 }),
-      });
-    },
+    handler: async ({ params }) =>
+      await respondWithDemo(params.id, (demo) => html(renderDemoCard(demo, null))),
   },
   {
     method: "GET",
     path: "/demos/:id",
-    handler: async ({ params }) => {
-      const selected = option(allDemos.find((d) => d.id === params.id) ?? null);
-      return await match(selected, {
-        Some: async ({ value }) => {
-          return html(renderPage(value, null));
-        },
-        None: async () =>
-          html(`<div class="demo-card__empty">Demo not found.</div>`, { status: 404 }),
-      });
-    },
+    handler: async ({ params }) =>
+      await respondWithDemo(params.id, (demo) => html(renderPage(demo, null))),
   },
   {
     method: "POST",
     path: "/showcase/:id/run",
-    handler: async ({ params }) => {
-      const selected = option(allDemos.find((d) => d.id === params.id) ?? null);
-      return await match(selected, {
-        Some: async ({ value }) => {
-          const run = await runDemo(value);
-          return html(renderRun(value, run));
-        },
-        None: async () =>
-          html(`<div class="demo-card__empty">Demo not found.</div>`, { status: 404 }),
-      });
-    },
+    handler: async ({ params }) =>
+      await respondWithDemo(params.id, async (demo) => {
+        const run = await runDemo(demo);
+        return html(renderRun(demo, run));
+      }),
   },
   {
     method: "GET",
     path: "/users/:id",
-    handler: ({ params, query }) => ok({ id: params.id, query }),
+    handler: ({ params, query }) => okResponse({ id: params.id, query }),
   },
   {
     method: "POST",
@@ -560,10 +597,3 @@ export const routes: Routes = [
   },
   { method: "GET", path: "/go", handler: () => redirect("/") },
 ];
-
-const escapeHtml = (s: string) =>
-  s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll(
-    '"',
-    "&quot;",
-  )
-    .replaceAll("'", "&#039;");

@@ -10,24 +10,7 @@ import {
   renderButton,
   renderCard,
 } from "../components/ui.ts";
-
-type BoolTag =
-  | Readonly<{ tag: "True" }>
-  | Readonly<{ tag: "False" }>;
-
-const boolTags: readonly BoolTag[] = [
-  { tag: "False" } as const,
-  { tag: "True" } as const,
-] as const;
-
-const toBoolTag = (flag: boolean): BoolTag => boolTags[Number(flag)];
-
-const escapeHtml = (s: string) =>
-  s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll(
-    '"',
-    "&quot;",
-  )
-    .replaceAll("'", "&#039;");
+import { type BoolTag, escapeHtml, toBoolTag } from "../lib/patterns.ts";
 
 // Comparison examples
 type ComparisonExample = Readonly<{
@@ -62,7 +45,7 @@ const increment = () =>
   seq()
     .let(() => State.get<{count: number}>())
     .let((state) => ({count: state.count + 1}))
-    .do((next) => Console.op.log(\`\${next.count}\`))
+    .do((next) => Console.log(\`\${next.count}\`))
     .do((next) => State.put(next))
     .return((next) => next.count);`,
       benefits: [
@@ -103,13 +86,13 @@ type Mode = {tag: "Beta"} | {tag: "Stable"};
 
 const processConfig = (input: string | undefined) =>
   match(presence(input), {
-    Missing: () => Exception.op.fail({tag: "MissingInput"}),
+    Missing: () => Exception.fail({tag: "MissingInput"}),
     Present: ({value}) =>
       match(identifyMode(value), {
         Beta: () => ({tag: "Beta" as const}),
         Stable: () => ({tag: "Stable" as const}),
         Unknown: ({value: v}) =>
-          Exception.op.fail({tag: "UnknownMode", value: v}),
+          Exception.fail({tag: "UnknownMode", value: v}),
       }),
   });`,
       benefits: [
@@ -306,7 +289,7 @@ const tick = () =>
   seq()
     .let(() => State.get<{count: number}>())
     .let((s) => ({count: s.count + 1}))
-    .do((next) => Console.op.log(\`Count: \${next.count}\`))
+    .do((next) => Console.log(\`Count: \${next.count}\`))
     .do((next) => State.put(next))
     .return((next) => next.count);`;
 

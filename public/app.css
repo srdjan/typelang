@@ -78,6 +78,26 @@ button {
   background: rgba(122, 162, 247, 0.22);
 }
 
+.button__spinner {
+  display: none;
+  width: 0.9rem;
+  height: 0.9rem;
+  border-radius: 999px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+}
+
+.button__spinner.htmx-request {
+  display: inline-block;
+  animation: button-spin 0.75s linear infinite;
+}
+
+@keyframes button-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
 .hero {
   display: grid;
   grid-template-columns: minmax(0, 2fr) minmax(0, 1fr);

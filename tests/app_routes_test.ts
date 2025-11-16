@@ -14,6 +14,7 @@ const baseCtx = (method: string, url: string): RequestCtx => {
     params: {},
     query: {},
     locals: {},
+    ip: "127.0.0.1",
   };
 };
 

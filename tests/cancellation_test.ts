@@ -2,7 +2,7 @@
 // Comprehensive tests for automatic cancellation and cleanup in typelang v0.3.0
 
 import { assertEquals, assertRejects } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { defineEffect, handlers, par, seq, stack } from "../typelang/mod.ts";
+import { defineEffect, handlers, ok, par, seq, stack } from "../typelang/mod.ts";
 import { Async, Console } from "../typelang/effects.ts";
 import type { Handler } from "../typelang/runtime.ts";
 
@@ -64,7 +64,7 @@ Deno.test("cleanup callbacks execute in LIFO order", async () => {
         .do(() => testEffect.op.setup(1))
         .do(() => testEffect.op.setup(2))
         .do(() => testEffect.op.setup(3))
-        .return(() => "done")
+        .return(() => ok("done"))
     );
   } catch {
     // Expected to throw
@@ -164,7 +164,7 @@ Deno.test("cleanup does NOT run on successful completion", async () => {
 
   const result = await stack(testHandler).run(() => testEffect.op.run());
 
-  assertEquals(result, "success");
+  assertEquals(result as unknown as string, "success");
   assertEquals(cleanupCalled, false, "Cleanup should NOT run on successful completion");
 });
 
@@ -250,7 +250,7 @@ Deno.test("par.race cancels losing branches", async () => {
     ])
   );
 
-  assertEquals(result, "fast-result", "Fast branch should win");
+  assertEquals(result as unknown as string, "fast-result", "Fast branch should win");
 
   // Wait a bit for cleanup to execute
   await new Promise((resolve) => setTimeout(resolve, 50));

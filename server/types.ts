@@ -7,6 +7,7 @@ export type RequestCtx = Readonly<{
   params: Readonly<Record<string, string>>;
   query: Readonly<Record<string, string | string[]>>;
   locals: Readonly<Record<string, unknown>>;
+  ip: string;
 }>;
 
 export type Handler = (ctx: RequestCtx) => Response | Promise<Response>;
@@ -27,4 +28,8 @@ export type ServerOptions = Readonly<{
   after?: readonly Middleware[];
   staticDir?: string;
   staticPrefix?: string;
+  allowedOrigins?: readonly string[];
+  auth?: (ctx: RequestCtx) => boolean;
+  trustProxy?: boolean;
+  rateLimitPerMinute?: number;
 }>;

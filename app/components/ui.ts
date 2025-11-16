@@ -2,34 +2,7 @@
 // Reusable UI components following typelang subset rules.
 
 import { match } from "../../typelang/match.ts";
-
-type BoolTag =
-  | Readonly<{ tag: "True" }>
-  | Readonly<{ tag: "False" }>;
-
-const boolTags: readonly BoolTag[] = [
-  { tag: "False" } as const,
-  { tag: "True" } as const,
-] as const;
-
-const toBoolTag = (flag: boolean): BoolTag => boolTags[Number(flag)];
-
-type Option<T> =
-  | Readonly<{ tag: "Some"; value: T }>
-  | Readonly<{ tag: "None" }>;
-
-const option = <T>(value: T | null | undefined): Option<T> =>
-  [
-    { tag: "None" } as const,
-    { tag: "Some", value: value as T } as const,
-  ][Number(value !== null && value !== undefined)];
-
-const escapeHtml = (s: string) =>
-  s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll(
-    '"',
-    "&quot;",
-  )
-    .replaceAll("'", "&#039;");
+import { type BoolTag, escapeHtml, type Option, option, toBoolTag } from "../lib/patterns.ts";
 
 // Simple syntax highlighter for TypeScript
 export const highlightTypeScript = (code: string): string => {

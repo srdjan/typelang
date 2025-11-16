@@ -9,13 +9,7 @@ import {
   renderButton,
   renderCodeBlock,
 } from "../components/ui.ts";
-
-const escapeHtml = (s: string) =>
-  s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll(
-    '"',
-    "&quot;",
-  )
-    .replaceAll("'", "&#039;");
+import { escapeHtml } from "../lib/patterns.ts";
 
 type HandlerConcept = Readonly<{
   id: string;
@@ -44,7 +38,7 @@ import { Console } from "../typelang/effects.ts";
 // 1. Your program uses Console effect
 const greet = (name: string) =>
   seq()
-    .do(() => Console.op.log(\`Hello, \${name}!\`))
+    .do(() => Console.log(\`Hello, \${name}!\`))
     .return(() => \`Greeted \${name}\`);
 
 // 2. Define a handler that interprets Console operations
@@ -99,7 +93,7 @@ import { Console, State, Exception, Async } from "../typelang/effects.ts";
 // Console.live() - prints to actual console
 const liveProgram = () =>
   seq()
-    .do(() => Console.op.log("This prints to console"))
+    .do(() => Console.log("This prints to console"))
     .return(() => 42);
 
 await stack(handlers.Console.live()).run(liveProgram);
@@ -108,8 +102,8 @@ await stack(handlers.Console.live()).run(liveProgram);
 // Console.capture() - records to array
 const captureProgram = () =>
   seq()
-    .do(() => Console.op.log("Captured"))
-    .do(() => Console.op.warn("Also captured"))
+    .do(() => Console.log("Captured"))
+    .do(() => Console.warn("Also captured"))
     .return(() => "done");
 
 const captured = await stack(handlers.Console.capture()).run(captureProgram);
@@ -126,7 +120,7 @@ await stack(handlers.State.with({count: 0})).run(stateProgram);
 // Returns: { result: "incremented", state: {count: 1} }
 
 // Exception.tryCatch() - converts failures to Result
-const failingProgram = () => Exception.op.fail({tag: "Error", msg: "Oops"});
+const failingProgram = () => Exception.fail({tag: "Error", msg: "Oops"});
 
 const result = await stack(handlers.Exception.tryCatch()).run(failingProgram);
 // result = { ok: false, error: {tag: "Error", msg: "Oops"} }
@@ -134,7 +128,7 @@ const result = await stack(handlers.Exception.tryCatch()).run(failingProgram);
 // Async.default() - handles sleep and await
 const asyncProgram = () =>
   seq()
-    .do(() => Async.op.sleep(100))
+    .do(() => Async.sleep(100))
     .return(() => "waited");
 
 await stack(handlers.Async.default()).run(asyncProgram);
@@ -268,14 +262,14 @@ import { Console, State, Exception, Async } from "../typelang/effects.ts";
 // Multi-effect program
 const complexProgram = () =>
   seq()
-    .do(() => Console.op.log("Starting..."))
+    .do(() => Console.log("Starting..."))
     .let(() => State.get<{count: number}>())
-    .do(() => Async.op.sleep(50))
+    .do(() => Async.sleep(50))
     .when(
       (state) => state.count < 0,
-      () => Exception.op.fail({tag: "NegativeCount"}),
+      () => Exception.fail({tag: "NegativeCount"}),
     )
-    .do((state) => Console.op.log(\`Count: \${state.count}\`))
+    .do((state) => Console.log(\`Count: \${state.count}\`))
     .do((state) => State.put({count: state.count + 1}))
     .return((state) => state.count + 1);
 

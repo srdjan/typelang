@@ -1,19 +1,18 @@
 import { assert, assertEquals, assertRejects } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { defineResource, handlers, par, stack, use } from "../typelang/mod.ts";
-import type { Eff } from "../typelang/mod.ts";
+import { defineResource, handlers, ok, par, stack, use } from "../typelang/mod.ts";
 import { getCurrentScopeController } from "../typelang/runtime.ts";
 
 type TestResource = Readonly<{ label: string }>;
 
 const blueprint = (label: string, events: string[]) => () =>
-  defineResource<TestResource, unknown, unknown>(
+  defineResource<TestResource, unknown, {}, unknown, {}>(
     () => {
       events.push(`acquire ${label}`);
-      return { label };
+      return ok({ label });
     },
-    (resource): Eff<void, unknown> => {
+    (resource) => {
       events.push(`release ${resource.label}`);
-      return undefined as Eff<void, unknown>;
+      return ok(undefined);
     },
     { label },
   );
@@ -28,9 +27,9 @@ Deno.test("use cleans up resources on successful completion", async () => {
       },
     ).in(({ file }) => {
       events.push(`body ${file.label}`);
-      return "ok";
+      return ok("ok");
     })
-  );
+  ) as unknown as string;
 
   assertEquals(result, "ok");
   assertEquals(events, ["acquire file", "body file", "release file"]);
@@ -52,7 +51,7 @@ Deno.test("use disposes multiple resources in LIFO order", async () => {
       },
     ).in(({ first, second, third }) => {
       events.push(`body ${first.label}/${second.label}/${third.label}`);
-      return "done";
+      return ok("done");
     })
   );
 
@@ -79,7 +78,10 @@ Deno.test("use cleans up when the body throws", async () => {
           },
         ).in(() => {
           events.push("body error");
-          throw new Error("boom");
+          // Return a never-typed expression so the body signature is satisfied while still throwing.
+          return ((): never => {
+            throw new Error("boom");
+          })();
         })
       ),
     Error,
@@ -94,7 +96,7 @@ Deno.test("use cleans up resources when scope is cancelled", async () => {
 
   await stack(handlers.Resource.scope()).run(async () =>
     par.race([
-      () => Promise.resolve("fast"),
+      () => ok("fast"),
       () =>
         use(
           {
@@ -114,7 +116,7 @@ Deno.test("use cleans up resources when scope is cancelled", async () => {
               { once: true },
             );
           }).catch(() => {});
-          return "slow branch";
+          return ok("slow branch");
         }),
     ])
   );
@@ -142,7 +144,7 @@ Deno.test("nested use scopes clean up inner resources before outer", async () =>
         },
       ).in(({ inner }) => {
         events.push(`body ${outer.label}+${inner.label}`);
-        return "nested";
+        return ok("nested");
       })
     )
   );

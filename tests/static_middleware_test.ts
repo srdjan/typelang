@@ -12,6 +12,7 @@ const makeCtx = (
   params: {},
   query: {},
   locals: {},
+  ip: "127.0.0.1",
 });
 
 const nextHandler = () => text("next handler called");

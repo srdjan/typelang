@@ -1,83 +1,47 @@
 // typelang/mod.ts
-// Public surface: types, effect constructors, sequential/parallel combinators, and helpers.
+// Public surface: types, effect interfaces, sequential/parallel combinators, and helpers.
 //
-// BEST PRACTICE: Use record-based capability types for multi-effect functions:
+// BEST PRACTICE: Use record-based effect types in Result signatures:
 //
-//   ✅ Good: Eff<User, { http: Http; db: Db; logger: Logger }>
-//   ❌ Avoid: Eff<User, HttpCap & DbCap & LoggerCap>
+//   ✅ Good: Result<User, Error, { http: HttpInterface; db: DbInterface; logger: ConsoleInterface }>
+//   ❌ Avoid: Result<User, Error, HttpEffects & DbEffects & LoggerEffects>
 //
-// Benefits of record-based capabilities:
+// Benefits of record-based effects:
 // - Order-independent destructuring (named properties prevent mistakes)
-// - Self-documenting signatures (capabilities visible at a glance)
+// - Self-documenting signatures (effects visible at a glance)
 // - No combinatorial type explosion (no need for composite types)
-// - Type-safe capability threading (compiler ensures all required caps are provided)
+// - Type-safe effect threading (compiler ensures all required effects are provided)
 
 import {
   getCurrentScopeController,
   Handler,
   handlers as builtInHandlers,
   resolveEff,
+  resolveResult,
   stack,
   withController,
 } from "./runtime.ts";
-import { AwaitedReturn, Capability, Combine, Eff, Instr, Pure } from "./types.ts";
+import { AwaitedReturn, Instr, UnwrapResult } from "./types.ts";
+import {
+  type Capability,
+  type Combine,
+  defineInterface,
+  type EffectInterface,
+  type InterfaceSpec,
+  type Pure,
+} from "./interfaces.ts";
+import { err, isErr, isOk, ok, type Result } from "./errors.ts";
 import { defineResource as defineResourceDescriptor, use as useResources } from "./resource.ts";
 import type { ResourceBlueprint, ResourceDescriptor, ResourceValues } from "./resource.ts";
 
-type EffectFn = (...args: any[]) => unknown;
-
-type Args<F> = F extends (...args: infer A) => unknown ? readonly [...A] : readonly unknown[];
-type Ret<F> = F extends (...args: any[]) => infer R ? AwaitedReturn<R> : never;
-
-export type { Capability, Combine, Eff, Pure };
-export { builtInHandlers as handlers, resolveEff, stack };
+// Re-export core types
+export type { Capability, Combine, EffectInterface, InterfaceSpec, Pure, Result };
+export { err, isErr, isOk, ok };
+export { defineInterface };
+export { builtInHandlers as handlers, resolveEff, resolveResult, stack };
 export type { Handler };
 export { defineResourceDescriptor as defineResource, useResources as use };
 export type { ResourceBlueprint, ResourceDescriptor, ResourceValues };
-
-// Effect constructor --------------------------------------------------------
-
-/**
- * defineEffect<Name, Spec> - Define a new effect with typed operations.
- *
- * Returns { name, op, spec } where:
- * - name: the effect name
- * - op: proxy object with typed operations
- * - spec: capability type for use in Eff signatures
- *
- * @example
- * const Http = defineEffect<"Http", {
- *   get: (url: string) => Response;
- *   post: (url: string, body: unknown) => Response;
- * }>("Http");
- *
- * // Use in function signatures with record-based capabilities:
- * const fetchUser = (id: string): Eff<User, { http: typeof Http.spec }> =>
- *   Http.op.get(`/users/${id}`);
- */
-export function defineEffect<
-  Name extends string,
-  Spec extends { readonly [K in keyof Spec]: EffectFn },
->(name: Name) {
-  type K = keyof Spec & string;
-  type OpMap = {
-    readonly [P in K]: (...args: Args<Spec[P]>) => Eff<Ret<Spec[P]>, Capability<Name, Spec>>;
-  };
-
-  const op = new Proxy({} as OpMap, {
-    get: (_target, prop: string) => (...args: readonly unknown[]) =>
-      ({ _tag: name, kind: prop, args, __ret: undefined as unknown as Ret<Spec[K]> } as Instr<
-        Name,
-        typeof prop,
-        Ret<Spec[K]>,
-        typeof args
-      >) as unknown as Eff<Ret<Spec[K]>, Capability<Name, Spec>>,
-  });
-
-  const spec = {} as Capability<Name, Spec>;
-
-  return { name, op, spec } as const;
-}
 
 // Sequential builder --------------------------------------------------------
 
@@ -88,29 +52,33 @@ type StepFn = (state: StepResult) => Promise<StepResult>;
 type SeqBuilder<C, Last> = {
   // Anonymous .let() - stores value in context under an auto-generated key (v1, v2, ...),
   // and also sets it as the new "last" value
-  let<A, E>(
-    f: (last: Last, ctx?: Readonly<C>) => Eff<A, E>,
+  let<A, E, Effects>(
+    f: (last: Last, ctx?: Readonly<C>) => Result<A, E, Effects>,
   ): SeqBuilder<C & Readonly<Record<string, A>>, A>;
   // Named .let() (kept for compatibility) - stores in context under provided key AND as "last"
-  let<K extends string, A, E>(
+  let<K extends string, A, E, Effects>(
     key: K,
-    f: (last: Last, ctx?: Readonly<C>) => Eff<A, E>,
+    f: (last: Last, ctx?: Readonly<C>) => Result<A, E, Effects>,
   ): SeqBuilder<C & Readonly<Record<K, A>>, A>;
   // Chain last value (like Promise.then)
-  then<A, E>(f: (last: Last) => Eff<A, E>): SeqBuilder<C, A>;
+  then<A, E, Effects>(f: (last: Last) => Result<A, E, Effects>): SeqBuilder<C, A>;
   // Side effect with last value only
-  tap<E>(f: (last: Last) => Eff<void, E>): SeqBuilder<C, Last>;
+  tap<E, Effects>(f: (last: Last) => Result<void, E, Effects>): SeqBuilder<C, Last>;
   // Side effect with last + context
-  do<E>(f: (last: Last, ctx: Readonly<C>) => Eff<void, E>): SeqBuilder<C, Last>;
+  do<E, Effects>(
+    f: (last: Last, ctx: Readonly<C>) => Result<void, E, Effects>,
+  ): SeqBuilder<C, Last>;
   // Conditional execution
-  when<E>(
+  when<E, Effects>(
     predicate: (last: Last, ctx?: Readonly<C>) => boolean,
-    thenBranch: (last: Last, ctx?: Readonly<C>) => Eff<void, E>,
+    thenBranch: (last: Last, ctx?: Readonly<C>) => Result<void, E, Effects>,
   ): SeqBuilder<C, Last>;
   // Return last value directly
-  value(): Eff<Last, unknown>;
+  value(): Result<Last, unknown, unknown>;
   // Return transformed value
-  return<A, E>(f: (last: Last, ctx?: Readonly<C>) => Eff<A, E>): Eff<A, E>;
+  return<A, E, Effects>(
+    f: (last: Last, ctx?: Readonly<C>) => Result<A, E, Effects>,
+  ): Result<A, E, Effects>;
 };
 
 const freeze = <T extends Record<string, unknown>>(value: T): T => Object.freeze({ ...value });
@@ -156,30 +124,30 @@ const buildSeq = <C, Last>(steps: readonly StepFn[]): SeqBuilder<C, Last> => ({
       >;
     }
   },
-  then<A, E>(f: (last: Last) => Eff<A, E>) {
+  then<A, E, Effects>(f: (last: Last) => Result<A, E, Effects>) {
     const next: StepFn = async (state) => {
       const value = await resolveEff(f(state.last as Last));
       return { ctx: state.ctx, last: value };
     };
     return buildSeq<C, A>([...steps, next]);
   },
-  tap<E>(f: (last: Last) => Eff<void, E>) {
+  tap<E, Effects>(f: (last: Last) => Result<void, E, Effects>) {
     const next: StepFn = async (state) => {
       await resolveEff(f(state.last as Last));
       return state;
     };
     return buildSeq<C, Last>([...steps, next]);
   },
-  do<E>(f: (last: Last, ctx: Readonly<C>) => Eff<void, E>) {
+  do<E, Effects>(f: (last: Last, ctx: Readonly<C>) => Result<void, E, Effects>) {
     const next: StepFn = async (state) => {
       await resolveEff(f(state.last as Last, state.ctx as Readonly<C>));
       return state;
     };
     return buildSeq<C, Last>([...steps, next]);
   },
-  when<E>(
+  when<E, Effects>(
     predicate: (last: Last, ctx?: Readonly<C>) => boolean,
-    thenBranch: (last: Last, ctx?: Readonly<C>) => Eff<void, E>,
+    thenBranch: (last: Last, ctx?: Readonly<C>) => Result<void, E, Effects>,
   ) {
     const next: StepFn = async (state) => {
       if (predicate(state.last as Last, state.ctx as Readonly<C>)) {
@@ -190,20 +158,20 @@ const buildSeq = <C, Last>(steps: readonly StepFn[]): SeqBuilder<C, Last> => ({
     return buildSeq<C, Last>([...steps, next]);
   },
   value() {
-    return resolveEff(
+    return ok(resolveEff(
       (async () => {
         const state = await runSteps(steps);
         return state.last as Last;
       })(),
-    ) as unknown as Eff<Last, unknown>;
+    )) as unknown as Result<Last, unknown, unknown>;
   },
-  return<A, E>(f: (last: Last, ctx?: Readonly<C>) => Eff<A, E>) {
-    return resolveEff(
+  return<A, E, Effects>(f: (last: Last, ctx?: Readonly<C>) => Result<A, E, Effects>) {
+    return ok(resolveEff(
       (async () => {
         const state = await runSteps(steps);
         return await resolveEff(f(state.last as Last, state.ctx as Readonly<C>));
       })(),
-    ) as unknown as Eff<A, E>;
+    )) as unknown as Result<A, E, Effects>;
   },
 });
 
@@ -211,21 +179,56 @@ export function seq() {
   return buildSeq<{}, void>([]);
 }
 
-// Parallel helpers ----------------------------------------------------------
+// Legacy effect helper ------------------------------------------------------
 
-const mapEntries = async (
-  entries: readonly [string, () => Eff<unknown, unknown>][],
-): Promise<Readonly<Record<string, unknown>>> => {
-  const results = await Promise.all(entries.map(([_, task]) => resolveEff(task())));
-  return Object.freeze(
-    Object.fromEntries(entries.map(([key], index) => [key, results[index]])),
-  );
+type EffectOperations<Name extends string, Ops> = {
+  [K in keyof Ops]: Ops[K] extends (...args: infer A) => infer R ? (...args: A) => Result<
+      AwaitedReturn<R>,
+      never,
+      Pure
+    >
+    : never;
 };
 
+export const defineEffect = <Name extends string, Ops>(
+  name: Name,
+): Readonly<{ spec: InterfaceSpec<Name, Ops>; op: EffectOperations<Name, Ops> }> => {
+  const spec = defineInterface<Name, Ops>(name);
+  const op = new Proxy(
+    {},
+    {
+      get(_target, key) {
+        if (typeof key !== "string") return undefined;
+        return (...args: readonly unknown[]) => {
+          const instr: Instr<Name, typeof key, unknown, readonly unknown[]> = {
+            _tag: name,
+            kind: key,
+            args,
+          };
+          return ok(instr as unknown);
+        };
+      },
+    },
+  ) as EffectOperations<Name, Ops>;
+  return { spec, op };
+};
+
+// Parallel helpers ----------------------------------------------------------
+
 export const par = {
-  all<T extends Record<string, () => Eff<unknown, unknown>>>(tasks: T) {
-    const entries = Object.entries(tasks) as readonly [string, () => Eff<unknown, unknown>][];
-    return resolveEff(
+  all<
+    T extends Record<
+      string,
+      () => Result<unknown, unknown, unknown> | Promise<Result<unknown, unknown, unknown>>
+    >,
+  >(
+    tasks: T,
+  ) {
+    const entries = Object.entries(tasks) as readonly [
+      string,
+      () => Result<unknown, unknown, unknown> | Promise<Result<unknown, unknown, unknown>>,
+    ][];
+    return ok(resolveEff(
       (async () => {
         const parentController = getCurrentScopeController();
 
@@ -258,13 +261,17 @@ export const par = {
           throw error;
         }
       })(),
-    ) as unknown as Eff<
-      { readonly [K in keyof T]: AwaitedReturn<ReturnType<T[K]>> },
+    )) as unknown as Result<
+      { readonly [K in keyof T]: UnwrapResult<AwaitedReturn<ReturnType<T[K]>>> },
+      unknown,
       unknown
     >;
   },
-  map<T, U, E>(xs: readonly T[], f: (value: T) => Eff<U, E>) {
-    return resolveEff(
+  map<T, U, E, Effects>(
+    xs: readonly T[],
+    f: (value: T) => Result<U, E, Effects> | Promise<Result<U, E, Effects>>,
+  ) {
+    return ok(resolveEff(
       (async () => {
         const parentController = getCurrentScopeController();
 
@@ -295,10 +302,12 @@ export const par = {
           throw error;
         }
       })(),
-    ) as unknown as Eff<readonly AwaitedReturn<U>[], E>;
+    )) as unknown as Result<readonly AwaitedReturn<U>[], E, Effects>;
   },
-  race<T, E>(thunks: readonly (() => Eff<T, E>)[]) {
-    return resolveEff(
+  race<T, E, Effects>(
+    thunks: readonly (() => Result<T, E, Effects> | Promise<Result<T, E, Effects>>)[],
+  ) {
+    return ok(resolveEff(
       (async () => {
         const parentController = getCurrentScopeController();
 
@@ -333,7 +342,7 @@ export const par = {
 
         return winner.result;
       })(),
-    ) as unknown as Eff<AwaitedReturn<T>, E>;
+    )) as unknown as Result<AwaitedReturn<T>, E, Effects>;
   },
 } as const;
 

@@ -1,17 +1,30 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { defineEffect, handlers, seq, stack } from "../typelang/mod.ts";
+import { defineInterface, handlers, ok, seq, stack } from "../typelang/mod.ts";
 import { Console, Exception, State } from "../typelang/effects.ts";
 import type { Handler } from "../typelang/runtime.ts";
+import type { Result } from "../typelang/errors.ts";
+import type { Instr } from "../typelang/types.ts";
 
 Deno.test("custom effects compose with built-ins", async () => {
-  const Custom = defineEffect<"Custom", { greet: (name: string) => string }>("Custom");
+  const CustomInterface = defineInterface<"Custom", { greet: (name: string) => string }>("Custom");
+
+  const createCustomOp = (
+    name: string,
+  ): Result<string, never, { custom: typeof CustomInterface }> => {
+    const instr: Instr<"Custom", "greet", string, [string]> = {
+      _tag: "Custom",
+      kind: "greet",
+      args: [name],
+    };
+    return ok(instr as unknown as string);
+  };
 
   const customHandler: Handler = {
     name: "Custom",
     handles: {
       greet: (instr, next, ctx) => {
         const [name] = instr.args;
-        return `Hello, ${name}!`;
+        return ok(`Hello, ${name}!`);
       },
     },
   };
@@ -21,7 +34,7 @@ Deno.test("custom effects compose with built-ins", async () => {
     handlers.Exception.tryCatch(),
   ).run(() =>
     seq()
-      .let(() => Custom.op.greet("World"))
+      .let(() => createCustomOp("World"))
       .value()
   ) as unknown;
 
@@ -36,6 +49,7 @@ Deno.test("handlers can intercept and transform operations", async () => {
       log: (instr, next, ctx) => {
         const [msg] = instr.args;
         captured.push(`[INTERCEPTED] ${msg}`);
+        return ok(undefined);
       },
     },
   };
@@ -45,8 +59,8 @@ Deno.test("handlers can intercept and transform operations", async () => {
     handlers.Exception.tryCatch(),
   ).run(() =>
     seq()
-      .do(() => Console.op.log("test"))
-      .return(() => "ok")
+      .do(() => Console.log("test"))
+      .return(() => ok("ok"))
   );
 
   assertEquals(captured, ["[INTERCEPTED] test"]);
@@ -57,7 +71,7 @@ Deno.test("state modifications are isolated per stack", async () => {
     seq()
       .tap(() => State.modify<{ count: number }>((s) => ({ count: s.count + 1 })))
       .let(() => State.get<{ count: number }>())
-      .then((state) => state.count)
+      .then((state) => ok(state.count))
       .value();
 
   const result1 = await stack(
@@ -79,10 +93,10 @@ Deno.test("exception handler short-circuits on fail", async () => {
     handlers.Exception.tryCatch(),
   ).run(() =>
     seq()
-      .let(() => "first")
-      .tap(() => Exception.op.fail({ reason: "error" }))
-      .let(() => "unreachable")
-      .return((b, ctx) => `${ctx!["v1"]}-${b}`)
+      .let(() => ok("first"))
+      .tap(() => Exception.fail({ reason: "error" }))
+      .let(() => ok("unreachable"))
+      .return((b, ctx) => ok(`${ctx!["v1"]}-${b}`))
   ) as unknown;
 
   assertEquals(result, { tag: "Err", error: { reason: "error" } });
@@ -94,10 +108,10 @@ Deno.test("console capture distinguishes log levels", async () => {
     handlers.Exception.tryCatch(),
   ).run(() =>
     seq()
-      .do(() => Console.op.log("info message"))
-      .do(() => Console.op.warn("warning message"))
-      .do(() => Console.op.error("error message"))
-      .return(() => "done")
+      .do(() => Console.log("info message"))
+      .do(() => Console.warn("warning message"))
+      .do(() => Console.error("error message"))
+      .return(() => ok("done"))
   ) as unknown as {
     result: { tag: string };
     logs: readonly string[];

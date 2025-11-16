@@ -3,13 +3,7 @@
 
 import { match } from "../../typelang/match.ts";
 import { type Badge, renderBadge } from "../components/ui.ts";
-
-const escapeHtml = (s: string) =>
-  s.replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll(
-    '"',
-    "&quot;",
-  )
-    .replaceAll("'", "&#039;");
+import { escapeHtml } from "../lib/patterns.ts";
 
 type ComparisonExample = Readonly<{
   id: string;
@@ -50,7 +44,7 @@ const increment = () =>
   seq()
     .let(() => State.get<{count: number}>())
     .let((state) => ({count: state.count + 1}))
-    .do((next) => Console.op.log(\`\${next.count}\`))
+    .do((next) => Console.log(\`\${next.count}\`))
     .do((next) => State.put(next))
     .return((next) => next.count);
 
@@ -102,13 +96,13 @@ type Mode = {tag: "Beta"} | {tag: "Stable"};
 
 const processConfig = (input: string | undefined) =>
   match(presence(input), {
-    Missing: () => Exception.op.fail({tag: "MissingInput"}),
+    Missing: () => Exception.fail({tag: "MissingInput"}),
     Present: ({value}) =>
       match(identifyMode(value), {
         Beta: () => ({tag: "Beta" as const}),
         Stable: () => ({tag: "Stable" as const}),
         Unknown: ({value: v}) =>
-          Exception.op.fail({tag: "UnknownMode", value: v}),
+          Exception.fail({tag: "UnknownMode", value: v}),
       }),
   });
 
@@ -225,7 +219,7 @@ const parseJSON = (input: string) =>
       match(tryParse(input), {
         Ok: ({value}) => value,
         Err: ({error}) =>
-          Exception.op.fail({
+          Exception.fail({
             tag: "InvalidJSON",
             message: error
           }),
@@ -233,7 +227,7 @@ const parseJSON = (input: string) =>
     )
     .when(
       (parsed) => !parsed.id,
-      () => Exception.op.fail({
+      () => Exception.fail({
         tag: "MissingField",
         field: "id"
       })
@@ -290,7 +284,7 @@ expect(consoleLog).toHaveBeenCalled();`,
 const getUser = (id: string) =>
   seq()
     .let(() => Database.op.query("SELECT * FROM users"))
-    .do((user) => Console.op.log(\`Found \${user.name}\`))
+    .do((user) => Console.log(\`Found \${user.name}\`))
     .return((user) => user);
 
 // Production
@@ -373,11 +367,11 @@ const calculateTotal = (amount: number, taxRate: number) =>
 
 const processOrder = (orderId: string, taxRate: number) =>
   seq()
-    .do(() => Console.op.log(\`Processing \${orderId}\`))
+    .do(() => Console.log(\`Processing \${orderId}\`))
     .let(() => Database.op.findOrder(orderId))
     .let((order) =>
       match(option(order), {
-        None: () => Exception.op.fail({tag: "NotFound"}),
+        None: () => Exception.fail({tag: "NotFound"}),
         Some: ({value}) => value,
       })
     )
