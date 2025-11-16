@@ -1,10 +1,10 @@
 // smoke_test.ts
 // Quick smoke test to verify the new Result-based effect system
 
-import { Console, Http } from "./typelang/effects.ts";
-import { handlers, ok, resolveResult, seq, stack } from "./typelang/mod.ts";
-import type { Result } from "./typelang/errors.ts";
-import type { ConsoleInterface, HttpInterface } from "./typelang/effects.ts";
+import { Console, Http } from "../typelang/effects.ts";
+import { handlers, ok, resolveResult, seq, stack } from "../typelang/mod.ts";
+import type { Result } from "../typelang/errors.ts";
+import type { ConsoleInterface, HttpInterface } from "../typelang/effects.ts";
 
 // Test 1: Basic effect operation
 const testBasicEffect = async (): Promise<void> => {

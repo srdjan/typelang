@@ -80,6 +80,61 @@ const fetchUser = (id: string) =>
 await stack(httpHandler()).run(() => fetchUser("123"));
 ```
 
+## Implementation Snapshot (v0.3.0)
+
+### Status
+
+- **Complete** – Automatic cancellation and cleanup shipped in typelang v0.3.0 with the runtime,
+  handler API, and documentation updates described in this design.
+- **Test coverage** – 11 focused cancellation tests (`tests/cancellation_test.ts`) plus the broader
+  suite all pass; total runtime for the cancellation suite is ~10 seconds (dominated by the long
+  sleep test).
+- **Documentation** – This document now serves as both the design reference and the implementation
+  report; the previous implementation summary has been merged here.
+
+### Key Components Delivered
+
+1. **Runtime + Handler API**
+   - Added `CancellationContext` objects exposing `signal` and `onCancel`.
+   - Made `HandlerFn` a breaking-change signature `(instr, next, ctx) => unknown`.
+   - Implemented LIFO cleanup stacks, per-branch `AbortController`s, and SIGINT/SIGTERM listeners in
+     `typelang/runtime.ts`.
+   - Added a 5-second timeout guard so hung cleanup callbacks cannot stall shutdown indefinitely.
+2. **Documentation & Examples**
+   - Updated `CLAUDE.md`, `examples/showcase/app/pages/learn_handlers.ts`, and other guides to show
+     use of `ctx.signal`/`ctx.onCancel` in custom handlers.
+3. **Tests & Verification**
+   - Authored `tests/cancellation_test.ts` with scenarios covering cleanup registration, LIFO order,
+     async timer cancellation, par.race/par.all propagation, nested scopes, and abort-aware
+     handlers.
+   - Confirmed the entire repository suite (`deno task test`) remains stable after the change.
+4. **Bug Fixes Encountered**
+   - Fixed timer leaks in `runCleanups()` by clearing timeout handles once cleanup resolves.
+   - Adjusted leaf handlers in the tests to return instead of calling `next()` (which triggered
+     "Unhandled effect" errors during LIFO assertions).
+   - Ensured `par.race()` losers and `par.all()` siblings observe abort signals by wiring
+     `ctx.signal` into the test handlers.
+   - Taught `withController` to run cleanup on both abort and error paths so failures don't skip
+     resource disposal.
+5. **Migration Impact**
+   - Mechanical but breaking: every custom handler must add the new `ctx` argument and register
+     cleanup when acquiring resources.
+   - Async operations (timers, fetches, file I/O) should pass `ctx.signal` or register cleanup via
+     `ctx.onCancel`.
+6. **Performance Characteristics**
+   - Controller stack work is O(1); cleanup registration is a lightweight array push; cleanup
+     execution is O(n) where n = number of registered callbacks.
+   - The default cleanup timeout is configurable in future work but currently set to 5 seconds to
+     balance safety and responsiveness.
+
+### Future Enhancements Snapshot
+
+- Configurable cleanup timeout per handler or per interpreter run.
+- Cleanup metrics / tracing to surface slow or failing callbacks.
+- Potential parallel cleanup execution where ordering is not required.
+- Resource leak detection (tracking outstanding registrations).
+- Faster tests by stubbing long sleeps once confidence is high.
+
 ### Key Design Decisions
 
 | Decision                         | Choice                                         | Rationale                                   |
