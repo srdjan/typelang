@@ -22,10 +22,10 @@ Hint: Wrap your code in stack(...handlers).run(() => ...)
 
 ```typescript
 // ❌ Wrong - effect called outside of stack
-const result = Console.op.log("hello");
+const result = Console.log("hello");
 
 // ✅ Correct - wrapped in stack
-const result = await stack(handlers.Console.live()).run(() => Console.op.log("hello"));
+const result = await stack(handlers.Console.live()).run(() => Console.log("hello"));
 ```
 
 ---
@@ -74,12 +74,12 @@ await stack(
 ```typescript
 // ❌ Wrong - 'user' not defined
 seq()
-  .do(() => Console.op.log(user.name));
+  .do(() => Console.log(user.name));
 
 // ✅ Correct - bind user first
 seq()
   .let("user", () => fetchUser(id))
-  .do(({ user }) => Console.op.log(user.name));
+  .do(({ user }) => Console.log(user.name));
 ```
 
 ---
@@ -142,7 +142,7 @@ const updated = { ...obj, count: obj.count + 1 };
 
 ### `if`/`else` are not allowed; use `match()`
 
-**Cause:** Using imperative conditionals in `app/` directory
+**Cause:** Using imperative conditionals in `examples/showcase/app/`
 
 **Fix:**
 
@@ -228,13 +228,13 @@ await stack(handlers.State.with({ count: 0 })).run(() =>
 
 ```typescript
 // ❌ Wrong - par runs concurrently, order not guaranteed
-par.map([1, 2, 3], (n) => Console.op.log(n));
+par.map([1, 2, 3], (n) => Console.log(n));
 
 // ✅ Correct - seq ensures ordered execution
 seq()
-  .do(() => Console.op.log(1))
-  .do(() => Console.op.log(2))
-  .do(() => Console.op.log(3))
+  .do(() => Console.log(1))
+  .do(() => Console.log(2))
+  .do(() => Console.log(3))
   .return(() => "done");
 ```
 
@@ -251,7 +251,7 @@ seq()
 1. Ensure file is in the configured static directory:
    ```typescript
    createServer(routes, {
-     staticDir: "./public", // Files must be in ./public/
+     staticDir: "./examples/showcase/public", // Files must be in ./examples/showcase/public/
      staticPrefix: "/static",
    });
    ```
@@ -337,7 +337,7 @@ const result = await stack(
   handlers.State.with({ count: 0 }),
 ).run(() =>
   seq()
-    .do(() => Console.op.log("Starting"))
+    .do(() => Console.log("Starting"))
     .let("initial", () => State.get())
     .do(() => State.modify((s) => ({ count: s.count + 1 })))
     .let("final", () => State.get())

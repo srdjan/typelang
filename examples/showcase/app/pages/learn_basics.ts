@@ -1,7 +1,7 @@
 // app/pages/learn_basics.ts
 // Learning path: Basic concepts (seq, match, pipe, unions).
 
-import { match } from "../../typelang/match.ts";
+import { match } from "../../../../typelang/match.ts";
 import {
   type Badge,
   type CodeBlock,

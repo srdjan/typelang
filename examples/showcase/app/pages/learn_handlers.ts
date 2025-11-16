@@ -1,7 +1,7 @@
 // app/pages/learn_handlers.ts
 // Learning path: Handler composition and advanced patterns.
 
-import { match } from "../../typelang/match.ts";
+import { match } from "../../../../typelang/match.ts";
 import {
   type Badge,
   type CodeBlock,

@@ -1,7 +1,10 @@
 {
   "$schema": "https://deno.land/x/deno/schemas/deno.schema.json",
+  "version": "0.4.0",
   "tasks": {
     "dev": "deno run -A server/main.ts",
+    "dev:showcase": "deno run -A examples/showcase/main.ts",
+    "dev:example": "deno run -A scripts/dev.ts",
     "test": "deno test --allow-read --allow-write",
     "test:watch": "deno test --allow-read --allow-write --watch",
     "test:coverage": "deno test --allow-read --allow-write --coverage=coverage && deno coverage coverage",

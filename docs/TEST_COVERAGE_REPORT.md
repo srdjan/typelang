@@ -16,7 +16,7 @@ _Last updated: November 15, 2025_
 | ------------------- | ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | Effect runtime      | `typelang/`                  | Handler stack, cancellation scopes, and resource helpers exercised by `tests/runtime_test.ts`, `seq_test.ts`, and `resource_test.ts`. |
 | HTTP server         | `server/`                    | Router, middleware, and static server verified via `tests/middleware_test.ts` and `tests/static_middleware_test.ts`.                  |
-| Showcase + routes   | `app/`                       | Route handlers and demo programs covered in `tests/app_routes_test.ts` plus showcase-specific suites.                                 |
+| Showcase + routes   | `examples/showcase/app/`     | Route handlers and demo programs covered in `tests/app_routes_test.ts` plus showcase-specific suites.                                 |
 | Security safeguards | `server/middleware.ts`       | Error boundary, rate limiter, auth, and CORS paths now under targeted tests.                                                          |
 | Subset tooling      | `scripts/`, `tests/subset_*` | Functional subset enforcement validated separately; excluded from coverage totals.                                                    |
 

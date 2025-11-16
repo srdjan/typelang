@@ -1,13 +1,13 @@
 // app/routes.ts
-import { Routes } from "../server/types.ts";
-import { html, isoNow, json, redirect } from "../server/http.ts";
+import { Routes } from "../../../server/types.ts";
+import { html, isoNow, json, redirect } from "../../../server/http.ts";
 import { demos, type NormalizedRun, runDemo } from "./showcase.ts";
 import type { DemoRun, ShowcaseDemo } from "./showcase.ts";
 import { additionalDemos } from "./demos_additional.ts";
-import { highlightCode } from "../server/highlight.ts";
-import { match } from "../typelang/match.ts";
-import { ok, seq } from "../typelang/mod.ts";
-import { Console, State } from "../typelang/effects.ts";
+import { highlightCode } from "../../../server/highlight.ts";
+import { match } from "../../../typelang/match.ts";
+import { ok, seq } from "../../../typelang/mod.ts";
+import { Console, State } from "../../../typelang/effects.ts";
 import { renderComparisonWidgetPartial, renderLandingPage } from "./pages/landing.ts";
 import { renderLearnBasicsPage } from "./pages/learn_basics.ts";
 import { renderLearnEffectsPage } from "./pages/learn_effects.ts";

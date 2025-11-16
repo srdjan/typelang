@@ -3,12 +3,12 @@
 // Enforces typelang's functional subset via lightweight lexical scanning.
 
 const SKIP_DIRS = new Set([".git", "node_modules", "dist", "build", "coverage", ".deno"]);
-const INCLUDE_PATTERNS = [/^\.\/app\//];
+const INCLUDE_PATTERNS = [/^\.\/examples\/showcase\/app\//];
 const SKIP_FILES = new Set(["./typelang/runtime.ts"]);
 const SKIP_PATTERNS = [
-  /^\.\/app\/pages\//, // UI rendering code
-  /^\.\/app\/components\//, // Reusable UI components
-  /^\.\/app\/routes\.ts$/, // Route definitions (allow mutation in render functions)
+  /^\.\/examples\/showcase\/app\/pages\//, // UI rendering code
+  /^\.\/examples\/showcase\/app\/components\//, // Reusable UI components
+  /^\.\/examples\/showcase\/app\/routes\.ts$/, // Route definitions (allow mutation in render functions)
 ];
 
 const isIncluded = (path: string) =>

@@ -3,17 +3,19 @@
 A trackable checklist to migrate the current demo application into /examples/showcase while keeping
 default dev behavior unchanged and adding a generic example runner.
 
+> Status: Completed for v0.4.0 — kept for reference so future examples can follow the same plan.
+
 ---
 
 ## 1) Server Refactor (keep default `deno task dev` behavior)
 
-- [ ] Edit server/main.ts (import.meta.main block only)
-  - [ ] Import routes from ../../examples/showcase/app/routes.ts
-  - [ ] Set staticDir to ./examples/showcase/public
-  - [ ] Set staticPrefix to /static
-  - [ ] Keep basePath "" (so the showcase mounts at "/")
-  - [ ] Do not change the createServer export/API
-- [ ] Quick smoke-compile: deno cache server/main.ts
+- [x] Edit server/main.ts (import.meta.main block only)
+  - [x] Import routes from ../../examples/showcase/app/routes.ts
+  - [x] Set staticDir to ./examples/showcase/public
+  - [x] Set staticPrefix to /static
+  - [x] Keep basePath "" (so the showcase mounts at "/")
+  - [x] Do not change the createServer export/API
+- [x] Quick smoke-compile: deno cache server/main.ts
 
 Notes:
 
@@ -24,22 +26,22 @@ Notes:
 
 ## 2) File Moves (create example layout)
 
-- [ ] Create directories
-  - [ ] examples/
-  - [ ] examples/showcase/
-  - [ ] examples/showcase/app/
-  - [ ] examples/showcase/app/pages/
-  - [ ] examples/showcase/app/components/
-  - [ ] examples/showcase/public/
-- [ ] Move demo application code
-  - [ ] Move app/routes.ts → examples/showcase/app/routes.ts
-  - [ ] Move app/showcase.ts → examples/showcase/app/showcase.ts
-  - [ ] Move app/demos_additional.ts → examples/showcase/app/demos_additional.ts
-  - [ ] Move app/pages/* → examples/showcase/app/pages/
-  - [ ] Move app/components/* → examples/showcase/app/components/
-- [ ] Move static assets
-  - [ ] Move public/* → examples/showcase/public/
-- [ ] Remove/clean up empty app/ and public/ directories after successful moves
+- [x] Create directories
+  - [x] examples/
+  - [x] examples/showcase/
+  - [x] examples/showcase/app/
+  - [x] examples/showcase/app/pages/
+  - [x] examples/showcase/app/components/
+  - [x] examples/showcase/public/
+- [x] Move demo application code
+  - [x] Move app/routes.ts → examples/showcase/app/routes.ts
+  - [x] Move app/showcase.ts → examples/showcase/app/showcase.ts
+  - [x] Move app/demos_additional.ts → examples/showcase/app/demos_additional.ts
+  - [x] Move app/pages/* → examples/showcase/app/pages/
+  - [x] Move app/components/* → examples/showcase/app/components/
+- [x] Move static assets
+  - [x] Move public/* → examples/showcase/public/
+- [x] Remove/clean up empty app/ and public/ directories after successful moves
 
 Notes:
 
@@ -52,19 +54,19 @@ Notes:
 Update relative imports in moved files so they continue to reference shared root modules (typelang/,
 server/):
 
-- [ ] In examples/showcase/app/_.ts (files moved from app/_)
-  - [ ] Update imports from ../typelang/... → ../../../typelang/...
-  - [ ] Update imports from ../server/... → ../../../server/...
-- [ ] In examples/showcase/app/pages/_.ts (files moved from app/pages/_)
-  - [ ] Update imports from ../../typelang/... → ../../../../typelang/...
-  - [ ] Update imports from ../../server/... → ../../../../server/...
-  - [ ] Keep ../components/ui.ts (still correct within app/)
-- [ ] In examples/showcase/app/routes.ts (moved from app/routes.ts)
-  - [ ] Update imports from ../server/... → ../../../server/...
-  - [ ] Update imports from ../typelang/... → ../../../typelang/...
-  - [ ] Keep ./pages/*, ./showcase.ts, ./demos_additional.ts (still correct)
-- [ ] In any files referencing server/highlight.ts or server/http.ts
-  - [ ] Ensure paths are adjusted to ../../../server/highlight.ts and ../../../server/http.ts where
+- [x] In examples/showcase/app/_.ts (files moved from app/_)
+  - [x] Update imports from ../typelang/... → ../../../typelang/...
+  - [x] Update imports from ../server/... → ../../../server/...
+- [x] In examples/showcase/app/pages/_.ts (files moved from app/pages/_)
+  - [x] Update imports from ../../typelang/... → ../../../../typelang/...
+  - [x] Update imports from ../../server/... → ../../../../server/...
+  - [x] Keep ../components/ui.ts (still correct within app/)
+- [x] In examples/showcase/app/routes.ts (moved from app/routes.ts)
+  - [x] Update imports from ../server/... → ../../../server/...
+  - [x] Update imports from ../typelang/... → ../../../typelang/...
+  - [x] Keep ./pages/*, ./showcase.ts, ./demos_additional.ts (still correct)
+- [x] In any files referencing server/highlight.ts or server/http.ts
+  - [x] Ensure paths are adjusted to ../../../server/highlight.ts and ../../../server/http.ts where
         applicable
 
 Notes:
@@ -75,19 +77,19 @@ Notes:
 
 ## 4) Tasks & Runners (scripts + deno.jsonc)
 
-- [ ] Create examples/showcase/main.ts (standalone entrypoint)
-  - [ ] Import { createServer } from ../../server/main.ts
-  - [ ] Import { routes } from ./app/routes.ts
-  - [ ] In import.meta.main: createServer(routes, { basePath: "", staticDir:
+- [x] Create examples/showcase/main.ts (standalone entrypoint)
+  - [x] Import { createServer } from ../../server/main.ts
+  - [x] Import { routes } from ./app/routes.ts
+  - [x] In import.meta.main: createServer(routes, { basePath: "", staticDir:
         "./examples/showcase/public", staticPrefix: "/static" })
-- [ ] Create scripts/dev.ts (generic example runner)
-  - [ ] Accept example name via CLI arg (default: "showcase")
-  - [ ] Dynamically import ./examples/<name>/main.ts and run it
-  - [ ] On error, print available examples and exit(1)
-- [ ] Update deno.jsonc tasks
-  - [ ] Keep existing: "dev": "deno run -A server/main.ts" (unchanged default)
-  - [ ] Add: "dev:showcase": "deno run -A examples/showcase/main.ts"
-  - [ ] Add: "dev:example": "deno run -A scripts/dev.ts showcase" (or allow arg pass-through)
+- [x] Create scripts/dev.ts (generic example runner)
+  - [x] Accept example name via CLI arg (default: "showcase")
+  - [x] Dynamically import ./examples/<name>/main.ts and run it
+  - [x] On error, print available examples and exit(1)
+- [x] Update deno.jsonc tasks
+  - [x] Keep existing: "dev": "deno run -A server/main.ts" (unchanged default)
+  - [x] Add: "dev:showcase": "deno run -A examples/showcase/main.ts"
+  - [x] Add: "dev:example": "deno run -A scripts/dev.ts showcase" (or allow arg pass-through)
 
 Notes:
 
@@ -98,21 +100,21 @@ Notes:
 
 ## 5) Documentation Updates
 
-- [ ] Update root README.md
-  - [ ] Project layout: reflect examples/showcase/{app,public} instead of root app/public
-  - [ ] Add "Examples" section with commands:
+- [x] Update root README.md
+  - [x] Project layout: reflect examples/showcase/{app,public} instead of root app/public
+  - [x] Add "Examples" section with commands:
     - deno task dev (default showcase)
     - deno task dev:showcase
     - deno task dev:example showcase
-  - [ ] Link to /examples/README.md
-- [ ] Create /examples/README.md
-  - [ ] List available examples (start with showcase)
-  - [ ] How to run each (dev:showcase, dev:example)
-  - [ ] Brief descriptions and pointers
-- [ ] Create /examples/showcase/README.md
-  - [ ] Describe the showcase
-  - [ ] How to run via dev:showcase and scripts/dev.ts
-  - [ ] Key routes and features
+  - [x] Link to /examples/README.md
+- [x] Create /examples/README.md
+  - [x] List available examples (start with showcase)
+  - [x] How to run each (dev:showcase, dev:example)
+  - [x] Brief descriptions and pointers
+- [x] Create /examples/showcase/README.md
+  - [x] Describe the showcase
+  - [x] How to run via dev:showcase and scripts/dev.ts
+  - [x] Key routes and features
 
 Notes:
 
@@ -122,16 +124,16 @@ Notes:
 
 ## 6) Verification & QA
 
-- [ ] deno fmt (format)
-- [ ] deno task lint (includes custom subset linter)
-- [ ] deno task test (all tests pass)
-- [ ] Smoke run (default): deno task dev
-  - [ ] Open / (landing), /demos, /comparison, /learn/*
-  - [ ] Confirm /static assets load from examples/showcase/public
-- [ ] Smoke run (example entry): deno task dev:showcase
-  - [ ] Confirm identical behavior to default dev
-- [ ] Smoke run (generic runner): deno task dev:example showcase
-  - [ ] Confirm identical behavior to default dev
+- [x] deno fmt (format)
+- [x] deno task lint (includes custom subset linter)
+- [x] deno task test (all tests pass)
+- [x] Smoke run (default): deno task dev
+  - [x] Open / (landing), /demos, /comparison, /learn/*
+  - [x] Confirm /static assets load from examples/showcase/public
+- [x] Smoke run (example entry): deno task dev:showcase
+  - [x] Confirm identical behavior to default dev
+- [x] Smoke run (generic runner): deno task dev:example showcase
+  - [x] Confirm identical behavior to default dev
 
 Notes:
 
@@ -162,12 +164,3 @@ Notes:
     }
   }
   ```
-
-## 8) Add support for pipes,
-
-- [ ] Add support for pipes, using https://github.com/irony/aspipes
-
-```typescript
-const greeting = pipe("hello");
-greeting | upper | ex("!!!");
-```

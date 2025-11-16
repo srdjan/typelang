@@ -1,7 +1,7 @@
 // app/pages/comparison.ts
 // Dedicated comparison page showing TypeScript vs typelang examples.
 
-import { match } from "../../typelang/match.ts";
+import { match } from "../../../../typelang/match.ts";
 import { type Badge, renderBadge } from "../components/ui.ts";
 import { escapeHtml } from "../lib/patterns.ts";
 

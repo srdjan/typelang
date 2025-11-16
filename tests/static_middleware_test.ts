@@ -18,7 +18,7 @@ const makeCtx = (
 const nextHandler = () => text("next handler called");
 
 Deno.test("withStatic serves files from directory", async () => {
-  const handler = withStatic("/static", "./public")(nextHandler);
+  const handler = withStatic("/static", "./examples/showcase/public")(nextHandler);
   const ctx = makeCtx("http://localhost/static/app.css");
 
   const res = await handler(ctx);
@@ -32,7 +32,7 @@ Deno.test("withStatic serves files from directory", async () => {
 });
 
 Deno.test("withStatic URL normalization prevents path traversal", async () => {
-  const handler = withStatic("/static", "./public")(nextHandler);
+  const handler = withStatic("/static", "./examples/showcase/public")(nextHandler);
   // URL constructor normalizes paths, so ../.. gets resolved
   // This means /static/subdir/../../etc becomes /etc which doesn't match /static prefix
   const ctx = makeCtx("http://localhost/static/subdir/../../../etc/passwd");
@@ -46,7 +46,7 @@ Deno.test("withStatic URL normalization prevents path traversal", async () => {
 });
 
 Deno.test("withStatic blocks null bytes", async () => {
-  const handler = withStatic("/static", "./public")(nextHandler);
+  const handler = withStatic("/static", "./examples/showcase/public")(nextHandler);
   const ctx = makeCtx("http://localhost/static/file\0.txt");
 
   const res = await handler(ctx);
@@ -56,7 +56,7 @@ Deno.test("withStatic blocks null bytes", async () => {
 });
 
 Deno.test("withStatic only handles GET requests", async () => {
-  const handler = withStatic("/static", "./public")(nextHandler);
+  const handler = withStatic("/static", "./examples/showcase/public")(nextHandler);
   const ctx = makeCtx("http://localhost/static/app.css", "POST");
 
   const res = await handler(ctx);
@@ -66,7 +66,7 @@ Deno.test("withStatic only handles GET requests", async () => {
 });
 
 Deno.test("withStatic only handles paths with prefix", async () => {
-  const handler = withStatic("/static", "./public")(nextHandler);
+  const handler = withStatic("/static", "./examples/showcase/public")(nextHandler);
   const ctx = makeCtx("http://localhost/api/users");
 
   const res = await handler(ctx);
@@ -76,7 +76,7 @@ Deno.test("withStatic only handles paths with prefix", async () => {
 });
 
 Deno.test("withStatic returns 403 for non-existent files (realPath fails)", async () => {
-  const handler = withStatic("/static", "./public")(nextHandler);
+  const handler = withStatic("/static", "./examples/showcase/public")(nextHandler);
   const ctx = makeCtx("http://localhost/static/nonexistent.txt");
 
   const res = await handler(ctx);
@@ -87,7 +87,7 @@ Deno.test("withStatic returns 403 for non-existent files (realPath fails)", asyn
 });
 
 Deno.test("withStatic sets correct content-type for different extensions", async () => {
-  const handler = withStatic("/static", "./public")(nextHandler);
+  const handler = withStatic("/static", "./examples/showcase/public")(nextHandler);
 
   // Test CSS
   const cssCtx = makeCtx("http://localhost/static/app.css");
@@ -96,7 +96,7 @@ Deno.test("withStatic sets correct content-type for different extensions", async
 });
 
 Deno.test("withStatic sets cache-control headers", async () => {
-  const handler = withStatic("/static", "./public")(nextHandler);
+  const handler = withStatic("/static", "./examples/showcase/public")(nextHandler);
   const ctx = makeCtx("http://localhost/static/app.css");
 
   const res = await handler(ctx);

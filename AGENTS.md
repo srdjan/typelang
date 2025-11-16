@@ -3,19 +3,20 @@
 ## Project Structure & Module Organization
 
 The TypeScript subset lives in `typelang/` (core effect runtime, handlers, helpers). The production
-HTTP pipeline is in `server/`, while `app/` holds user-facing routes and showcase demos that feed
-into the server. Static assets belong in `public/`, docs and specs sit in `docs/` plus `TODO.md`,
-and cross-cutting scripts (subset linter, hook setup) are in `scripts/`. Tests reside in `tests/`
-with fixtures in `coverage/` when coverage is generated.
+HTTP pipeline is in `server/`, while `examples/showcase/app/` holds user-facing routes and showcase
+demos that feed into the server. Static assets live in `examples/showcase/public/`, docs and specs
+sit in `docs/` plus `TODO.md`, and cross-cutting scripts (subset linter, hook setup) are in
+`scripts/`. Tests reside in `tests/` with fixtures in `coverage/` when coverage is generated.
 
 ## Build, Test, and Development Commands
 
-Use `deno task dev` to start the local server on `http://127.0.0.1:8080`. `deno task lint` runs
-`deno lint --quiet` followed by `deno run -A scripts/lint_subset.ts` to enforce the functional
-subset. `deno task test`, `deno task test:watch`, and `deno task test:coverage` cover the full
-suite, watch mode, and coverage report respectively; expect artifacts inside `coverage/`.
-`deno task fmt` auto-formats the repo, and `deno task setup-hooks` points Git at `.githooks/` if you
-need the same pre-commit checks locally.
+Use `deno task dev` to start the local server on `http://127.0.0.1:8080`. `deno task dev:showcase`
+invokes `examples/showcase/main.ts` directly, and `deno task dev:example <name>` loads
+`examples/<name>/main.ts` through the generic runner. `deno task lint` runs `deno lint --quiet`
+followed by `deno run -A scripts/lint_subset.ts` to enforce the functional subset. `deno task test`,
+`deno task test:watch`, and `deno task test:coverage` cover the full suite, watch mode, and coverage
+report respectively; expect artifacts inside `coverage/`. `deno task fmt` auto-formats the repo, and
+`deno task setup-hooks` points Git at `.githooks/` if you need the same pre-commit checks locally.
 
 ## Coding Style & Naming Conventions
 

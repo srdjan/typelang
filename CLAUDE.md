@@ -44,7 +44,7 @@ deno task setup-hooks   # Configure git hooks (pre-commit, post-commit, pre-push
 Git hooks in `.githooks/` automatically run format checks, linting, and tests before commits.
 
 The custom subset linter (`scripts/lint_subset.ts`) enforces strict functional rules on files
-matching `INCLUDE_PATTERNS` (currently `app/` directory). It forbids:
+matching `INCLUDE_PATTERNS` (currently `examples/showcase/app/`). It forbids:
 
 - Classes, `this`, `new` (except `new Proxy`)
 - `if`/`else`, ternary `?:` (use `match()` instead)
@@ -80,20 +80,21 @@ server/             # HTTP server implementation (NOT subject to subset linting)
   highlight.ts      # Syntax highlighting utilities
   effects.ts        # Server-specific effects
 
-app/                # Application routes (STRICTLY enforces subset rules)
-  routes.ts         # Route definitions as data (Routes array)
-  showcase.ts       # Interactive demo programs
-  demos_additional.ts  # Additional demo programs
-  pages/            # Page components (landing, learn, comparison)
-  components/       # Reusable UI components
+examples/           # Example applications (subset-enforced)
+  showcase/
+    app/            # Routes, HTMX renderers, demo programs
+    components/     # UI components (subset safe)
+    pages/          # UI pages
+    public/         # Static assets served at /static
+    main.ts         # Entry point exporting start()
 
-scripts/            # Development tooling
+scripts/            # Development tooling & runners
   lint_subset.ts    # Custom lexical linter for functional subset
+  dev.ts            # Generic example runner (deno task dev:example)
 
 tests/              # Test suite (116 tests)
   *_test.ts         # Unit and integration tests for all modules
 
-public/             # Static assets served at /static
 docs/               # Design specifications and guides
 .githooks/          # Git hooks (pre-commit, post-commit, pre-push)
 ```
@@ -271,9 +272,9 @@ const fileHandler: Handler = {
 // Race example: losing branches automatically clean up
 const fastest = await stack(handlers.Http.default()).run(() =>
   par.race([
-    () => Http.op.get("https://api1.example.com/data"),
-    () => Http.op.get("https://api2.example.com/data"),
-    () => Http.op.get("https://api3.example.com/data"),
+    () => Http.get("https://api1.example.com/data"),
+    () => Http.get("https://api2.example.com/data"),
+    () => Http.get("https://api3.example.com/data"),
   ])
 );
 // Winner's request completes, losers are cancelled and cleaned up
@@ -285,24 +286,6 @@ const fastest = await stack(handlers.Http.default()).run(() =>
 2. **Pass `ctx.signal` to cancelable APIs** (fetch, setTimeout, subprocess)
 3. **Don't throw from cleanup callbacks** - log errors instead
 4. **Test Ctrl-C behavior** during development with long-running operations
-
-**Migration from v0.2.x:**
-
-All custom handlers must add the `ctx` parameter:
-
-```typescript
-// Before (v0.2.x)
-handles: {
-  myOp: ((instr, next) => {/* ... */});
-}
-
-// After (v0.3.0)
-handles: {
-  myOp: ((instr, next, ctx) => {/* ... */});
-}
-```
-
-See `docs/migration-v0.3.md` for full migration guide.
 
 #### 4. HTTP Server (server/)
 
@@ -318,7 +301,7 @@ const routes: Routes = [
 // Server composes middleware and terminal handler
 const server = createServer(routes, {
   basePath: "",
-  staticDir: "./public",
+  staticDir: "./examples/showcase/public",
   staticPrefix: "/static"
 });
 ```
@@ -451,7 +434,8 @@ match(result, {
 
 #### 7. Functional Subset Enforcement
 
-The `app/` directory must follow strict subset rules checked by `lint_subset.ts`. This ensures:
+Everything under `examples/showcase/app/` must follow strict subset rules checked by
+`scripts/lint_subset.ts`. This ensures:
 
 - **Pure data transformations**: No classes, no mutation, no side effects
 - **Expression-oriented**: Use `match()` instead of `if`/`else`, `pipe()` for composition
@@ -532,7 +516,7 @@ Run tests with:
 
 ### Adding a Route
 
-1. Add route definition to `app/routes.ts`:
+1. Add route definition to `examples/showcase/app/routes.ts`:
    ```typescript
    { method: "POST", path: "/api/foo/:id", handler: async ({ params, req }) => {
      // Must follow functional subset rules!
@@ -586,7 +570,7 @@ Run tests with:
 - **Zero npm dependencies**: Uses only Deno standard library
 - **Functional core, imperative shell**: Effects pushed to runtime handlers
 - **Type-driven design**: Phantom types track effect requirements at compile time
-- **Subset-enforced purity**: Application code (`app/`) strictly functional
+- **Subset-enforced purity**: Example code (`examples/showcase/app/`) strictly functional
 - **Middleware composition**: Cross-cutting concerns via function composition
 
 ## Configuration
@@ -595,7 +579,9 @@ All configuration in `deno.jsonc`:
 
 **Tasks:**
 
-- `dev` - Start development server
+- `dev` - Start development server (showcase via `server/main.ts`)
+- `dev:showcase` - Run `examples/showcase/main.ts` directly
+- `dev:example` - Run `scripts/dev.ts` to boot any example
 - `test` - Run all tests
 - `test:watch` - Run tests in watch mode
 - `test:coverage` - Run tests with coverage report
@@ -638,19 +624,28 @@ Enable hooks with: `deno task setup-hooks`
 
 **Key documentation files:**
 
+- `README.md` - User-facing project overview and quick start
+- `examples/README.md` & `examples/showcase/README.md` - Example inventory and showcase details
+- `docs/README.md` - Documentation index + file purposes
 - `CLAUDE.md` - This file: comprehensive guide for AI assistants
-- `README.md` - User-facing project overview
-- `TODO.md` - Planned features and migration tasks
-- `docs/resource-usage.md` - Resource management guide
-- `docs/resource-raii-design.md` - Resource effect design document
-- `docs/migration-v0.3.md` - Migration guide from v0.2.x
-- `docs/cancellation-design.md` - Cancellation system design
-- `docs/TESTING.md` - Testing strategy and guidelines
-- `docs/IMPROVEMENTS.md` - Potential improvements and ideas
+- `TODO.md` - Active technical backlog (post-reorg)
+- `docs/resource-usage.md` / `docs/resource-raii-design.md` - Resource management guides
+- `docs/cancellation-design.md` / `docs/cancellation-implementation-summary.md` - Cancellation specs
+- `docs/TESTING.md` & `docs/TEST_COVERAGE_REPORT.md` - Testing strategy and coverage metrics
+- `docs/improvements.md` - Potential improvements and ideas
+- `docs/troubleshooting.md` - Common issues and fixes
+- `docs/archive/` - Historical guides (e.g., migration notes) retained for reference only
 
 ## Version History
 
-**v0.3.0+** (Current)
+**v0.4.0** (Current)
+
+- `examples/showcase/` houses app code + assets moved out of repo root
+- New `scripts/dev.ts` runner plus `deno task dev:showcase` / `dev:example`
+- Documentation inventory (`docs/README.md`) and updated README/examples guides
+- Migration content archived under `docs/archive/` to reduce noise
+
+**v0.3.0**
 
 - Resource effect with RAII-style automatic cleanup
 - Enhanced cancellation with CancellationContext (breaking change)

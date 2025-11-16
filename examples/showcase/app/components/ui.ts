@@ -1,7 +1,7 @@
 // app/components/ui.ts
 // Reusable UI components following typelang subset rules.
 
-import { match } from "../../typelang/match.ts";
+import { match } from "../../../../typelang/match.ts";
 import { type BoolTag, escapeHtml, type Option, option, toBoolTag } from "../lib/patterns.ts";
 
 // Simple syntax highlighter for TypeScript

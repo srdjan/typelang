@@ -55,7 +55,7 @@ Deno.test("console capture collects logs and wraps result", async () => {
     handlers.Exception.tryCatch(),
   ).run(() =>
     seq()
-      .do(() => Console.op.log("hello"))
+      .do(() => Console.log("hello"))
       .return(() => "ok")
   );
 
@@ -86,7 +86,7 @@ Deno.test("console capture collects logs and wraps result", async () => {
 
 ```typescript
 Deno.test("withStatic blocks path traversal", async () => {
-  const handler = withStatic("/static", "./public")(nextHandler);
+  const handler = withStatic("/static", "./examples/showcase/public")(nextHandler);
   const ctx = makeCtx("http://localhost/static/../etc/passwd");
 
   const res = await handler(ctx);
@@ -313,7 +313,7 @@ The test suite is designed to run in CI environments:
 
 ## Known Gaps
 
-### Application Routes (app/routes.ts)
+### Application Routes (examples/showcase/app/routes.ts)
 
 - **Coverage:** 0%
 - **Priority:** Medium

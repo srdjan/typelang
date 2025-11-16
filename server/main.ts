@@ -11,7 +11,7 @@ import {
 } from "./middleware.ts";
 import { RequestCtx, Routes, ServerOptions } from "./types.ts";
 import { parseQuery } from "./http.ts";
-import * as App from "../app/routes.ts";
+import * as App from "../examples/showcase/app/routes.ts";
 
 const DEFAULT_ALLOWED_ORIGINS = [
   "http://127.0.0.1:8080",
@@ -131,5 +131,9 @@ export const createServer = (routes: Routes, opts: ServerOptions = {}) => {
 };
 
 if (import.meta.main) {
-  createServer(App.routes, { basePath: "", staticDir: "./public", staticPrefix: "/static" });
+  createServer(App.routes, {
+    basePath: "",
+    staticDir: "./examples/showcase/public",
+    staticPrefix: "/static",
+  });
 }

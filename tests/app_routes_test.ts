@@ -1,5 +1,5 @@
 import { assertEquals, assertStringIncludes } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { routes } from "../app/routes.ts";
+import { routes } from "../examples/showcase/app/routes.ts";
 import type { RequestCtx } from "../server/types.ts";
 
 const findRoute = (method: string, path: string) =>

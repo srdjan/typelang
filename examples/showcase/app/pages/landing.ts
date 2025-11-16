@@ -1,7 +1,7 @@
 // app/pages/landing.ts
 // Landing page with hero, value propositions, and quick comparisons.
 
-import { match } from "../../typelang/match.ts";
+import { match } from "../../../../typelang/match.ts";
 import {
   type Badge,
   type Button,

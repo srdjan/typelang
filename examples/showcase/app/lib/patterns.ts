@@ -1,7 +1,7 @@
 // app/lib/patterns.ts
 // Shared helpers for Bool tags, Option values, and HTML escaping.
 
-import { match } from "../../typelang/match.ts";
+import { match } from "../../../../typelang/match.ts";
 
 export type BoolTag =
   | Readonly<{ tag: "True" }>

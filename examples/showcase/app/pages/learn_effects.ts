@@ -1,7 +1,7 @@
 // app/pages/learn_effects.ts
 // Learning path: Effect system deep dive.
 
-import { match } from "../../typelang/match.ts";
+import { match } from "../../../../typelang/match.ts";
 import {
   type Badge,
   type CodeBlock,

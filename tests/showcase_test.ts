@@ -1,5 +1,5 @@
 import { assert, assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { demos, runDemo } from "../app/showcase.ts";
+import { demos, runDemo } from "../examples/showcase/app/showcase.ts";
 
 const byId = (id: string) => demos.find((demo) => demo.id === id);
 

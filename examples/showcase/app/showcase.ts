@@ -1,9 +1,9 @@
 // app/showcase.ts
 // Declarative showcase programs highlighting typelang capabilities.
 
-import { Async, Console, Exception, State } from "../typelang/effects.ts";
-import { handlers, match, ok, par, pipe, seq, stack } from "../typelang/mod.ts";
-import type { Handler, Result } from "../typelang/mod.ts";
+import { Async, Console, Exception, State } from "../../../typelang/effects.ts";
+import { handlers, match, ok, par, pipe, seq, stack } from "../../../typelang/mod.ts";
+import type { Handler, Result } from "../../../typelang/mod.ts";
 import { type BoolTag, type Option, option, toBoolTag } from "./lib/patterns.ts";
 
 const jsonStringify = (value: unknown): string => JSON.stringify(value, null, 2) ?? String(value);

@@ -55,10 +55,8 @@ type HandlerFn = (instr: AnyInstr, next: Next, ctx: CancellationContext) => unkn
 **Files Updated**:
 
 - [CLAUDE.md](../CLAUDE.md) - Added comprehensive cancellation section (lines 167-281)
-- [docs/migration-v0.3.md](../docs/migration-v0.3.md) - Complete migration guide with patterns and
-  troubleshooting
-- [app/pages/learn_handlers.ts](../app/pages/learn_handlers.ts) - Added "Cancellation & Cleanup"
-  learning section
+- [examples/showcase/app/pages/learn_handlers.ts](../examples/showcase/app/pages/learn_handlers.ts) -
+  Added "Cancellation & Cleanup" learning section
 
 **Examples Added**:
 
@@ -258,7 +256,6 @@ const myHandler: Handler = {
 ## References
 
 - **Design Document**: [docs/cancellation-design.md](./cancellation-design.md)
-- **Migration Guide**: [docs/migration-v0.3.md](./migration-v0.3.md)
 - **Inspiration**: [Effection v4.0.0-beta.2](https://frontside.com/effection)
 - **Test Suite**: [tests/cancellation_test.ts](../tests/cancellation_test.ts)
 

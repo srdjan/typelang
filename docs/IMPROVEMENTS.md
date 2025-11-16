@@ -89,7 +89,7 @@ All **4 recommended implementation steps** have been completed:
   ```typescript
   seq()
     .let("value", () => 10)
-    .when(({ value }) => value > 5, ({ value }) => Console.op.log(`Large: ${value}`))
+    .when(({ value }) => value > 5, ({ value }) => Console.log(`Large: ${value}`))
     .return(({ value }) => value);
   ```
 - **Impact**: More expressive sequential computations

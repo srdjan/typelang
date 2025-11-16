@@ -1,14 +1,20 @@
 # **typelang**: Exploration of a Strictly Functional TypeScript Subset
 
+Current release: **v0.4.0** (November 16, 2025) — see `CHANGELOG.md` for the full notes.
+
 Lean, functional TypeScript subset with algebraic-effects style APIs, a tiny handler runtime, and a
 **modern Deno HTTP server** that accepts externally-defined `Routes`.
 
 ## Run
 
 ```bash
-deno task dev
-# open http://localhost:8080
+deno task dev              # default developer loop (showcase)
+deno task dev:showcase     # run examples/showcase/main.ts directly
+deno task dev:example demo # generic runner (defaults to showcase)
+# open http://127.0.0.1:8080
 ```
+
+See `examples/README.md` for the list of available demos and wiring instructions.
 
 ## Interactive showcase
 
@@ -59,14 +65,22 @@ See [TEST_COVERAGE_REPORT.md](./docs/TEST_COVERAGE_REPORT.md) for detailed cover
 
 ```
 typelang-repo/
-  typelang/        # effect runtime + helpers: Eff, defineEffect, seq, par, handlers, match, pipe
-  server/          # lean HTTP server + middleware + router
-  app/             # external routes (the “input” to server)
-  public/          # static assets (served at /static)
-  scripts/         # subset linter (Deno-only)
-  tests/           # comprehensive test suite (116 tests)
-  deno.jsonc       # tasks: dev, test, lint, fmt
+  typelang/                # effect runtime + helpers: Result, seq(), par(), handlers, resources
+  server/                  # lean HTTP server + middleware + router
+  examples/
+    showcase/
+      app/                 # user-facing routes and HTMX demos (subset-enforced)
+      public/              # static assets for the showcase, served at /static
+      main.ts              # example entrypoint exporting start()
+  docs/                    # design documents, specs, troubleshooting, testing notes
+  scripts/                 # subset linter + helper runners
+  tests/                   # comprehensive test suite (116 tests)
+  coverage/                # populated via deno task test:coverage
+  deno.jsonc               # tasks: dev, dev:showcase, dev:example, test, lint, fmt
 ```
+
+Read `examples/showcase/README.md` for a deep dive into the shipped showcase and its routes. See
+`docs/README.md` for the full documentation map.
 
 ## Server features
 
@@ -90,7 +104,7 @@ typelang-repo/
 - `TYPELANG_RATE_LIMIT` overrides the default 300-requests-per-minute budget enforced by
   `withRateLimit`. You can also set `ServerOptions.rateLimitPerMinute`.
 - Static assets are streamed directly from disk with extension-based caching headers. Keep large
-  files inside `public/` so `withStatic()` can serve them efficiently.
+  files inside `examples/showcase/public/` so `withStatic()` can serve them efficiently.
 
 ## Typelang (minimal surface used here)
 
@@ -101,6 +115,24 @@ typelang-repo/
 - `stack(...handlers).run()` interpreter with built-in Console / State / Exception / Async handlers
 - `seq()` and `par` helpers (iterator-free) for linear & parallel steps that respect `Eff`
 - `match()` and `pipe()` utilities for expression-oriented control flow
+
+### seq() context keys
+
+```typescript
+const hydrateProfile = (userId: string) =>
+  seq()
+    .let(() => fetchUser(userId)) // ctx.v1
+    .let((user) => fetchPosts(user.id)) // ctx.v2
+    .let((_posts, ctx) => fetchFollowers((ctx!.v1 as User).id)) // ctx.v3
+    .return((followers, ctx) => ({
+      user: ctx!.v1 as User,
+      posts: ctx!.v2 as Post[],
+      followers,
+    }));
+```
+
+Each anonymous `.let()` stores its result under an auto-generated key (`ctx.v1`, `ctx.v2`, …), so
+later steps can safely read any prior value without mutating local state.
 
 ---
 

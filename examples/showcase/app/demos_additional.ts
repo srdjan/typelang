@@ -1,8 +1,8 @@
 // app/demos_additional.ts
 // Additional demo programs to showcase more typelang features.
 
-import { Async, Console, Exception, State } from "../typelang/effects.ts";
-import { handlers, match, ok, par, pipe, seq, stack } from "../typelang/mod.ts";
+import { Async, Console, Exception, State } from "../../../typelang/effects.ts";
+import { handlers, match, ok, par, pipe, seq, stack } from "../../../typelang/mod.ts";
 import type { DemoArtifact, DemoEvent, DemoRun, ShowcaseDemo } from "./showcase.ts";
 import { type BoolTag, type Option, option, toBoolTag } from "./lib/patterns.ts";
 
