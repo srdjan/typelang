@@ -629,12 +629,13 @@ Enable hooks with: `deno task setup-hooks`
 - `docs/README.md` - Documentation index + file purposes
 - `CLAUDE.md` - This file: comprehensive guide for AI assistants
 - `TODO.md` - Active technical backlog (post-reorg)
-- `docs/resource-usage.md` / `docs/resource-raii-design.md` - Resource management guides
-<<<<<<< HEAD
-- `docs/cancellation-design.md` / `docs/cancellation-implementation-summary.md` - Cancellation specs
-=======
+- `docs/resource-usage.md` / `docs/resource-raii-design.md` - Resource management guides <<<<<<<
+  HEAD
+- # `docs/cancellation-design.md` / `docs/cancellation-implementation-summary.md` - Cancellation specs
 - `docs/cancellation-design.md` - Cancellation design + implementation snapshot
+
 >>>>>>> d2ed767 (v0.4.0)
+
 - `docs/TESTING.md` & `docs/TEST_COVERAGE_REPORT.md` - Testing strategy and coverage metrics
 - `docs/improvements.md` - Potential improvements and ideas
 - `docs/troubleshooting.md` - Common issues and fixes
