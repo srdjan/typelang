@@ -1,11 +1,11 @@
 # Test Coverage Report
 
-_Last updated: November 15, 2025_
+_Last updated: November 21, 2025_
 
 ## How coverage is generated
 
 1. Run `deno task test:coverage`.
-   - Executes the full suite (116 tests as of this report) with coverage instrumentation and stores
+   - Executes the full suite (140 tests as of this report) with coverage instrumentation and stores
      raw data in `coverage/`.
 2. Produce a human-readable summary: `deno coverage coverage --summary`.
    - Optionally emit LCOV for CI upload: `deno coverage coverage --lcov --output=coverage.lcov`.

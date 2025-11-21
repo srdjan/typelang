@@ -127,10 +127,10 @@ const workflowProgram = (): Result<
   WorkflowCaps
 > =>
   seq()
-    .let(() => State.get<WorkflowState>())
+    .let("state", () => State.get<WorkflowState>())
     .then((state) => ok(state.stage))
     .then((stage) => nextStage(stage))
-    .let((next) => ok(next))
+    .let("next", (next) => ok(next))
     .then((next) =>
       ok({
         tag: "StageChanged" as const,
@@ -138,15 +138,13 @@ const workflowProgram = (): Result<
         note: stageNote(next),
       })
     )
-    .let((event) => ok(event))
+    .let("event", (event) => ok(event))
     .tap((event) => Console.log(`Stage → ${stageLabel(event.stage)}`))
-    .do((event, ctx) => {
-      const state = ctx!["v1"] as WorkflowState;
+    .tapWith(({ state, event }) => {
       const history = appendEvent(state.history, event);
       return State.put<WorkflowState>({ stage: event.stage, history });
     })
-    .return((event, ctx) => {
-      const state = ctx!["v1"] as WorkflowState;
+    .returnWith(({ state, event }) => {
       const history = appendEvent(state.history, event);
       return ok({ stage: event.stage, history });
     });
@@ -239,13 +237,12 @@ type ParallelProgramCaps = Readonly<{
 
 const parallelProgram = () =>
   seq()
-    .let(() =>
+    .let("results", () =>
       par.all({
         console: () => runTask(parallelDescriptors[0]),
         state: () => runTask(parallelDescriptors[1]),
         async: () => runTask(parallelDescriptors[2]),
-      })
-    )
+      }))
     .then((results) =>
       ok(pipe(parallelDescriptors, (descriptors) =>
         descriptors.map((descriptor) =>
@@ -427,15 +424,15 @@ type ConfigProgramCaps = Readonly<{
 
 const configProgram = (): Result<ConfigSnapshot, ConfigError, ConfigProgramCaps> =>
   seq()
-    .let(() => ok(configInput))
+    .let("input", () => ok(configInput))
     .tap((input) => Console.log(`Validating ${input.label}`))
-    .let((input) => ensureFlag(input.featureFlag))
-    .let((_, ctx) => ensureThrottle((ctx!["v1"] as ConfigInput).throttle))
-    .return((throttle, ctx) =>
+    .let("feature", (input) => ensureFlag(input.featureFlag))
+    .let("throttle", (_, ctx) => ensureThrottle(ctx!["input"].throttle))
+    .returnWith(({ input, feature, throttle }) =>
       ok({
-        feature: ctx!["v2"] as FeatureMode,
+        feature,
         throttle,
-        label: (ctx!["v1"] as ConfigInput).label,
+        label: input.label,
       })
     );
 
@@ -521,21 +518,20 @@ type WorkflowCaps = Readonly<{
 
 const workflow = (): Eff<WorkflowSnapshot, WorkflowCaps> =>
   seq()
-    .let(() => State.get<WorkflowState>()) // ctx.v1
+    .let("state", () => State.get<WorkflowState>())
     .then((state) => state.stage)
     .then((stage) => nextStage(stage))
-    .let((next) => next) // ctx.v2
+    .let("next", (next) => next)
     .then((next) => ({ stage: next, note: stageNote(next) }))
-    .let((event) => event) // ctx.v3
+    .let("event", (event) => event)
     .tap((event) => Console.log(\`Stage → \${stageLabel(event.stage)}\`))
-    .do((event, ctx) => {
-      const state = ctx!["v1"] as WorkflowState;
+    .tapWith(({ state, event }) => {
       const history = appendEvent(state.history, event);
       return State.put({ stage: event.stage, history });
     })
-    .return((event, ctx) => {
-      const state = ctx!["v1"] as WorkflowState;
-      return { stage: event.stage, history: appendEvent(state.history, event) };
+    .returnWith(({ state, event }) => {
+      const history = appendEvent(state.history, event);
+      return { stage: event.stage, history };
     });`,
     state: { initial: initialWorkflow, label: "Workflow" },
     usesAsync: false,
@@ -608,14 +604,14 @@ type ConfigProgramCaps = Readonly<{
 
 const config = (): Eff<ConfigSnapshot, ConfigProgramCaps> =>
   seq()
-    .let(() => configInput) // ctx.v1
+    .let("input", () => configInput)
     .tap((input) => Console.log(\`Validating \${input.label}\`))
-    .let((input) => ensureFlag(input.featureFlag)) // ctx.v2
-    .let((_, ctx) => ensureThrottle((ctx!["v1"] as ConfigInput).throttle)) // ctx.v3
-    .return((throttle, ctx) => ({
-      feature: ctx!["v2"] as FeatureMode,
+    .let("feature", (input) => ensureFlag(input.featureFlag))
+    .let("throttle", (_, ctx) => ensureThrottle(ctx!["input"].throttle))
+    .returnWith(({ input, feature, throttle }) => ({
+      feature,
       throttle,
-      label: (ctx!["v1"] as ConfigInput).label,
+      label: input.label,
     }));`,
     state: null,
     usesAsync: false,

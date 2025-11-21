@@ -2,6 +2,38 @@
 
 All notable changes to this project will be documented in this file. Dates use YYYY-MM-DD.
 
+## [0.4.1] - 2025-11-21
+
+### Features
+
+- Added `.tapWith(fn)` method to `seq()` - receives typed context object without `last` parameter
+- Added `.returnWith(fn)` method to `seq()` - returns value from typed context object only
+- Enhanced JSDoc comments in `SeqBuilder` type to recommend named `.let("key", fn)` over anonymous
+  `.let(fn)`
+
+### Improvements
+
+- Updated all showcase examples to use named context keys (`.let("state", ...)` instead of
+  `.let(...)`)
+- Refactored workflow, parallel, and config demos to use `.tapWith()` and `.returnWith()` for
+  cleaner, self-documenting code
+- Updated CLAUDE.md with "Best Practice: Named Keys" section showing benefits of named vs
+  auto-generated keys
+- Updated README.md example to demonstrate `.returnWith()` with destructured context
+- Updated blog post to reflect improved API with note about earlier versions
+
+### Testing
+
+- Added 4 new tests for `.tapWith()` and `.returnWith()` methods
+- Test suite now has 140 tests (up from 116)
+- All tests pass with zero regressions
+
+### Documentation
+
+- Updated test count references in README, CLAUDE.md, blog post, and TEST_COVERAGE_REPORT.md
+- Enhanced documentation emphasizes autocomplete and type safety benefits of named keys
+- Code examples now show modern best practices throughout
+
 ## [0.4.0] - 2025-11-16
 
 ### Breaking changes

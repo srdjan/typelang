@@ -23,7 +23,7 @@ deno task dev        # Start development server with watch mode (-A for all perm
 ### Testing
 
 ```bash
-deno task test              # Run all tests (116 tests)
+deno task test              # Run all tests (140 tests)
 deno task test:watch        # Run tests in watch mode (auto-rerun on changes)
 deno task test:coverage     # Run tests with coverage report
 ```
@@ -92,7 +92,7 @@ scripts/            # Development tooling & runners
   lint_subset.ts    # Custom lexical linter for functional subset
   dev.ts            # Generic example runner (deno task dev:example)
 
-tests/              # Test suite (116 tests)
+tests/              # Test suite (140 tests)
   *_test.ts         # Unit and integration tests for all modules
 
 docs/               # Design specifications and guides
@@ -157,25 +157,38 @@ const result = await stack(handler).run(() => program);
 
 #### 2. Sequential & Parallel Combinators
 
-**seq()** - monadic sequential composition with auto-named bindings:
+**seq()** - monadic sequential composition with named bindings:
 
 ```typescript
+// RECOMMENDED: Use named keys for values you'll reference later
 seq()
-  .let(() => fetchUser(id)) // ctx.v1
+  .let("user", () => fetchUser(id))
   .then((user) => fetchPosts(user.id))
-  .let((posts) => posts) // ctx.v2
+  .let("posts", (posts) => posts)
   .tap((posts) => Console.log(`Found ${posts.length} posts`))
-  .return((posts, ctx) => ({ user: ctx!["v1"], posts }));
+  .returnWith(({ user, posts }) => ({ user, posts })); // Typed context!
 ```
+
+**Best Practice: Named Keys**
+
+Use `.let("key", fn)` instead of anonymous `.let(fn)` for values you'll need in later steps:
+
+- ✅ Named keys: autocomplete, type safety, self-documenting
+- ❌ Auto-generated keys (`v1`, `v2`): require manual type assertions like `ctx!["v1"] as Type`
 
 Key seq() methods:
 
-- `.let(f)` - auto-named binding (stored in context as v1, v2, v3, ...)
-- `.then(f)` - chain transformation on last value
-- `.tap(f)` - side effect with last value
-- `.do(f)` - action with (last, ctx)
-- `.value()` - return last value
-- `.return(f)` - close with f(last, ctx?)
+- `.let("key", f)` - **RECOMMENDED** named binding with explicit key
+- `.let(f)` - auto-named binding (stored as v1, v2, v3...) - use for values you won't reference
+  later
+- `.then(f)` - chain transformation on last value (doesn't store in context)
+- `.tap(f)` - side effect with last value only
+- `.tapWith(f)` - side effect with typed context object: `f(ctx)` - no type assertions needed
+- `.do(f)` - side effect with last + context: `f(last, ctx)`
+- `.value()` - return last value directly
+- `.return(f)` - transform with last + optional context: `f(last, ctx?)`
+- `.returnWith(f)` - transform with typed context only: `f(ctx)` - encourages naming all
+  dependencies
 
 **par** - parallel execution:
 
@@ -464,7 +477,7 @@ pipe(
 
 ## Testing Strategy
 
-**Comprehensive test suite** with 116 tests in the `tests/` directory:
+**Comprehensive test suite** with 140 tests in the `tests/` directory:
 
 - **Runtime tests** (`runtime_test.ts`): Handler composition, effect resolution, cancellation
 - **Effect tests** (`effects_test.ts`): Console, State, Exception, Async, Http effects
@@ -655,7 +668,7 @@ Enable hooks with: `deno task setup-hooks`
 - Resource effect with RAII-style automatic cleanup
 - Enhanced cancellation with CancellationContext (breaking change)
 - Standard error types and Result utilities
-- Comprehensive test suite (116 tests)
+- Comprehensive test suite (140 tests)
 - Git hooks for automated quality checks
 
 **v0.2.x**

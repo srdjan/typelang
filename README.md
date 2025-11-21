@@ -41,7 +41,7 @@ and `let`/`var`.
 ## Test
 
 ```bash
-# Run all tests (116 tests)
+# Run all tests (140 tests)
 deno task test
 
 # Run tests in watch mode (auto-rerun on file changes)
@@ -51,7 +51,7 @@ deno task test:watch
 deno task test:coverage
 ```
 
-**Test Coverage:** 116 tests covering:
+**Test Coverage:** 140 tests covering:
 
 - ✅ Effect runtime (handlers, combinators, seq, par)
 - ✅ HTTP server (routing, middleware, utilities)
@@ -74,7 +74,7 @@ typelang-repo/
       main.ts              # example entrypoint exporting start()
   docs/                    # design documents, specs, troubleshooting, testing notes
   scripts/                 # subset linter + helper runners
-  tests/                   # comprehensive test suite (116 tests)
+  tests/                   # comprehensive test suite (140 tests)
   coverage/                # populated via deno task test:coverage
   deno.jsonc               # tasks: dev, dev:showcase, dev:example, test, lint, fmt
 ```
@@ -116,23 +116,25 @@ Read `examples/showcase/README.md` for a deep dive into the shipped showcase and
 - `seq()` and `par` helpers (iterator-free) for linear & parallel steps that respect `Eff`
 - `match()` and `pipe()` utilities for expression-oriented control flow
 
-### seq() context keys
+### seq() with named context keys
 
 ```typescript
 const hydrateProfile = (userId: string) =>
   seq()
-    .let(() => fetchUser(userId)) // ctx.v1
-    .let((user) => fetchPosts(user.id)) // ctx.v2
-    .let((_posts, ctx) => fetchFollowers((ctx!.v1 as User).id)) // ctx.v3
-    .return((followers, ctx) => ({
-      user: ctx!.v1 as User,
-      posts: ctx!.v2 as Post[],
+    .let("user", () => fetchUser(userId))
+    .let("posts", (user) => fetchPosts(user.id))
+    .let("followers", (_, ctx) => fetchFollowers(ctx!["user"].id))
+    .returnWith(({ user, posts, followers }) => ({
+      user,
+      posts,
       followers,
     }));
 ```
 
-Each anonymous `.let()` stores its result under an auto-generated key (`ctx.v1`, `ctx.v2`, …), so
-later steps can safely read any prior value without mutating local state.
+**Best practice:** Use named `.let("key", fn)` for values you'll reference later. This provides
+autocomplete, type safety, and self-documenting code. Anonymous `.let(fn)` generates auto keys
+(`v1`, `v2`...) that require type assertions. The new `.returnWith(fn)` method receives a typed
+context object, eliminating manual type casts.
 
 ---
 

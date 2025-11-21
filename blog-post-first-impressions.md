@@ -46,27 +46,30 @@ type WorkflowCaps = Readonly<{
 
 const workflow = (): Result<WorkflowSnapshot, unknown, WorkflowCaps> =>
   seq()
-    .let(() => State.get<WorkflowState>()) // ctx.v1
+    .let("state", () => State.get<WorkflowState>())
     .then((state) => state.stage)
     .then((stage) => nextStage(stage))
-    .let((next) => next) // ctx.v2
+    .let("next", (next) => next)
     .then((next) => ({ stage: next, note: stageNote(next) }))
-    .let((event) => event) // ctx.v3
+    .let("event", (event) => event)
     .tap((event) => Console.log(`Stage → ${stageLabel(event.stage)}`))
-    .do((event, ctx) => {
-      const state = ctx!["v1"] as WorkflowState;
+    .tapWith(({ state, event }) => {
       const history = appendEvent(state.history, event);
       return State.put({ stage: event.stage, history });
     })
-    .return((event, ctx) => {
-      const state = ctx!["v1"] as WorkflowState;
-      return { stage: event.stage, history: appendEvent(state.history, event) };
+    .returnWith(({ state, event }) => {
+      const history = appendEvent(state.history, event);
+      return { stage: event.stage, history };
     });
 ```
 
-Here's the cool part: `seq()` threads workflow state without mutation. Each `.let()` stores its
-result in an auto-generated context key (`v1`, `v2`, `v3`...). Later steps access any prior value
-through the context. No mutable variables. No reassignment. No accidental overwrites.
+Here's the cool part: `seq()` threads workflow state without mutation. Use named `.let("key", fn)`
+for values you'll reference later - this gives you autocomplete, type safety, and self-documenting
+code. The `.tapWith()` and `.returnWith()` methods receive typed context objects, so no manual type
+assertions (`ctx!["v1"] as Type`). No mutable variables. No reassignment. No accidental overwrites.
+
+**Note:** Earlier versions used auto-generated keys (`v1`, `v2`, `v3`...) requiring type assertions.
+The current API recommends named keys for better ergonomics.
 
 The type signature tells you exactly what effects this program needs: Console for logging, State for
 workflow tracking, Exception for error handling. This depends of the record-based capability
@@ -232,8 +235,8 @@ it's overhead if you're just building a static site generator.
 
 ## The Testing Story
 
-116 tests covering the runtime, effects, HTTP server, middleware, routing, security (path traversal,
-input validation), and the subset linter itself. Coverage reports live in
+140 tests covering the runtime, effects, HTTP server, middleware, routing, security (path traversal,
+input validation), seq() combinators, and the subset linter itself. Coverage reports live in
 `docs/TEST_COVERAGE_REPORT.md`.
 
 Tests look like this:

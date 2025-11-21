@@ -52,10 +52,12 @@ type StepFn = (state: StepResult) => Promise<StepResult>;
 type SeqBuilder<C, Last> = {
   // Anonymous .let() - stores value in context under an auto-generated key (v1, v2, ...),
   // and also sets it as the new "last" value
+  // BEST PRACTICE: Use named .let("key", fn) for values you'll reference later
   let<A, E, Effects>(
     f: (last: Last, ctx?: Readonly<C>) => Result<A, E, Effects>,
   ): SeqBuilder<C & Readonly<Record<string, A>>, A>;
-  // Named .let() (kept for compatibility) - stores in context under provided key AND as "last"
+  // Named .let() - stores in context under provided key AND as "last"
+  // RECOMMENDED: Use this for values you'll need in later steps
   let<K extends string, A, E, Effects>(
     key: K,
     f: (last: Last, ctx?: Readonly<C>) => Result<A, E, Effects>,
@@ -64,6 +66,9 @@ type SeqBuilder<C, Last> = {
   then<A, E, Effects>(f: (last: Last) => Result<A, E, Effects>): SeqBuilder<C, A>;
   // Side effect with last value only
   tap<E, Effects>(f: (last: Last) => Result<void, E, Effects>): SeqBuilder<C, Last>;
+  // Side effect with typed context (no last parameter)
+  // Use when you need named bindings from context
+  tapWith<E, Effects>(f: (ctx: Readonly<C>) => Result<void, E, Effects>): SeqBuilder<C, Last>;
   // Side effect with last + context
   do<E, Effects>(
     f: (last: Last, ctx: Readonly<C>) => Result<void, E, Effects>,
@@ -75,9 +80,14 @@ type SeqBuilder<C, Last> = {
   ): SeqBuilder<C, Last>;
   // Return last value directly
   value(): Result<Last, unknown, unknown>;
-  // Return transformed value
+  // Return transformed value from last + optional context
   return<A, E, Effects>(
     f: (last: Last, ctx?: Readonly<C>) => Result<A, E, Effects>,
+  ): Result<A, E, Effects>;
+  // Return transformed value from typed context (no last parameter)
+  // Use when you've named all values you need in context
+  returnWith<A, E, Effects>(
+    f: (ctx: Readonly<C>) => Result<A, E, Effects>,
   ): Result<A, E, Effects>;
 };
 
@@ -138,6 +148,13 @@ const buildSeq = <C, Last>(steps: readonly StepFn[]): SeqBuilder<C, Last> => ({
     };
     return buildSeq<C, Last>([...steps, next]);
   },
+  tapWith<E, Effects>(f: (ctx: Readonly<C>) => Result<void, E, Effects>) {
+    const next: StepFn = async (state) => {
+      await resolveEff(f(state.ctx as Readonly<C>));
+      return state;
+    };
+    return buildSeq<C, Last>([...steps, next]);
+  },
   do<E, Effects>(f: (last: Last, ctx: Readonly<C>) => Result<void, E, Effects>) {
     const next: StepFn = async (state) => {
       await resolveEff(f(state.last as Last, state.ctx as Readonly<C>));
@@ -170,6 +187,14 @@ const buildSeq = <C, Last>(steps: readonly StepFn[]): SeqBuilder<C, Last> => ({
       (async () => {
         const state = await runSteps(steps);
         return await resolveEff(f(state.last as Last, state.ctx as Readonly<C>));
+      })(),
+    )) as unknown as Result<A, E, Effects>;
+  },
+  returnWith<A, E, Effects>(f: (ctx: Readonly<C>) => Result<A, E, Effects>) {
+    return ok(resolveEff(
+      (async () => {
+        const state = await runSteps(steps);
+        return await resolveEff(f(state.ctx as Readonly<C>));
       })(),
     )) as unknown as Result<A, E, Effects>;
   },
