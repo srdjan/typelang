@@ -17,21 +17,23 @@ repository.
 ### Running the Application
 
 ```bash
-deno task dev        # Start development server with watch mode (-A for all permissions)
+deno task dev            # Start server with showcase loaded (watch mode, -A)
+deno task dev:showcase   # Run examples/showcase/main.ts directly
+deno task dev:example    # Generic runner (defaults to showcase)
 ```
 
 ### Testing
 
 ```bash
 deno task test              # Run all tests (140 tests)
-deno task test:watch        # Run tests in watch mode (auto-rerun on changes)
-deno task test:coverage     # Run tests with coverage report
+deno task test:watch        # Watch mode
+deno task test:coverage     # Coverage artifacts -> ./coverage/
 ```
 
 ### Linting
 
 ```bash
-deno task lint       # Run Deno linter + custom subset checker
+deno task lint       # Deno lint + custom subset checker
 deno fmt             # Format code
 ```
 
@@ -41,7 +43,8 @@ deno fmt             # Format code
 deno task setup-hooks   # Configure git hooks (pre-commit, post-commit, pre-push)
 ```
 
-Git hooks in `.githooks/` automatically run format checks, linting, and tests before commits.
+Git hooks in `.githooks/` gate commits with `deno fmt --check`, `deno task lint`, and
+`deno test --allow-read --allow-write --quiet`—they never auto-format.
 
 The custom subset linter (`scripts/lint_subset.ts`) enforces strict functional rules on files
 matching `INCLUDE_PATTERNS` (currently `examples/showcase/app/`). It forbids:
@@ -67,8 +70,8 @@ typelang/           # Effect runtime: Eff type, defineEffect, handlers, combinat
   effects.ts        # Built-in effect definitions (Console, State, Exception, Async, Http, Resource)
   resource.ts       # Resource effect & RAII helpers (use, defineResource)
   errors.ts         # Standard error types and Result utilities
-  seq.ts, par.ts    # Sequential/parallel combinators (deprecated, use mod.ts)
-  match.ts, pipe.ts # Utilities (deprecated, use mod.ts)
+  seq.ts, par.ts    # Thin wrappers (prefer importing from mod.ts)
+  match.ts, pipe.ts # Thin wrappers (prefer importing from mod.ts)
   runtime_test.ts   # Runtime integration tests
 
 server/             # HTTP server implementation (NOT subject to subset linting)
@@ -80,7 +83,7 @@ server/             # HTTP server implementation (NOT subject to subset linting)
   highlight.ts      # Syntax highlighting utilities
   effects.ts        # Server-specific effects
 
-examples/           # Example applications (subset-enforced)
+examples/           # Example applications (subset-enforced; currently showcase only)
   showcase/
     app/            # Routes, HTMX renderers, demo programs
     components/     # UI components (subset safe)
@@ -622,11 +625,11 @@ No build step required - Deno runs TypeScript directly.
 
 ## Git Workflow
 
-**Pre-commit hook** (`.githooks/pre-commit`) automatically runs:
+**Pre-commit hook** (`.githooks/pre-commit`) gates commits with:
 
-1. Format check (`deno fmt --check`)
-2. Lint check (`deno task lint`)
-3. All tests (`deno test`)
+1. `deno fmt --check`
+2. `deno task lint`
+3. `deno test --allow-read --allow-write --quiet`
 
 Enable hooks with: `deno task setup-hooks`
 
@@ -638,21 +641,14 @@ Enable hooks with: `deno task setup-hooks`
 **Key documentation files:**
 
 - `README.md` - User-facing project overview and quick start
-- `examples/README.md` & `examples/showcase/README.md` - Example inventory and showcase details
+- `examples/showcase/README.md` - Showcase details and routes
 - `docs/README.md` - Documentation index + file purposes
 - `CLAUDE.md` - This file: comprehensive guide for AI assistants
-- `TODO.md` - Active technical backlog (post-reorg)
-- `docs/resource-usage.md` / `docs/resource-raii-design.md` - Resource management guides <<<<<<<
-  HEAD
-- # `docs/cancellation-design.md` / `docs/cancellation-implementation-summary.md` - Cancellation specs
-- `docs/cancellation-design.md` - Cancellation design + implementation snapshot
-
->>>>>>> d2ed767 (v0.4.0)
-
-- `docs/TESTING.md` & `docs/TEST_COVERAGE_REPORT.md` - Testing strategy and coverage metrics
-- `docs/improvements.md` - Potential improvements and ideas
-- `docs/troubleshooting.md` - Common issues and fixes
-- `docs/archive/` - Historical guides (e.g., migration notes) retained for reference only
+- `TODO.md` - Active technical backlog
+- `docs/resource-usage.md` / `docs/resource-raii-design.md` - Resource management guides
+- `docs/cancellation-design.md` / `docs/cancellation-implementation-summary.md` - Cancellation specs
+- `docs/blog-post-first-impressions.md` - Narrative walkthrough with annotated snippets
+- `docs/improvements.md` - Current snapshot of shipped improvements
 
 ## Version History
 

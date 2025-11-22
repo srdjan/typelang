@@ -68,8 +68,9 @@ for values you'll reference later - this gives you autocomplete, type safety, an
 code. The `.tapWith()` and `.returnWith()` methods receive typed context objects, so no manual type
 assertions (`ctx!["v1"] as Type`). No mutable variables. No reassignment. No accidental overwrites.
 
-**Note:** Earlier versions used auto-generated keys (`v1`, `v2`, `v3`...) requiring type assertions.
-The current API recommends named keys for better ergonomics.
+**Note:** Anonymous `.let(fn)` still stores results under auto-generated keys (`v1`, `v2`, `v3`,
+...). Prefer named keys plus `tapWith`/`returnWith` when you need to read from context to avoid type
+assertions.
 
 The type signature tells you exactly what effects this program needs: Console for logging, State for
 workflow tracking, Exception for error handling. This depends of the record-based capability

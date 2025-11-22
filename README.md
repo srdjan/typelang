@@ -14,7 +14,7 @@ deno task dev:example demo # generic runner (defaults to showcase)
 # open http://127.0.0.1:8080
 ```
 
-See `examples/README.md` for the list of available demos and wiring instructions.
+See `examples/showcase/README.md` for the shipped demo and routing details.
 
 ## Interactive showcase
 
@@ -59,7 +59,7 @@ deno task test:coverage
 - ✅ Security (path traversal, input validation)
 - ✅ Functional subset linter
 
-See [TEST_COVERAGE_REPORT.md](./docs/TEST_COVERAGE_REPORT.md) for detailed coverage analysis.
+Coverage artifacts land in `./coverage/` (via `deno task test:coverage`).
 
 ## Project layout
 
@@ -67,7 +67,7 @@ See [TEST_COVERAGE_REPORT.md](./docs/TEST_COVERAGE_REPORT.md) for detailed cover
 typelang-repo/
   typelang/                # effect runtime + helpers: Result, seq(), par(), handlers, resources
   server/                  # lean HTTP server + middleware + router
-  examples/
+  examples/                # example apps (currently only showcase)
     showcase/
       app/                 # user-facing routes and HTMX demos (subset-enforced)
       public/              # static assets for the showcase, served at /static
